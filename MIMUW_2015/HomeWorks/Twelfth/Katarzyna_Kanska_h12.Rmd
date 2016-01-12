@@ -1,0 +1,97 @@
+---
+title: "Homework 12"
+author: "Katarzyna Kanska"
+date: "14.01.2016"
+output: 
+  html_document:
+    toc: TRUE
+---
+
+## Goal
+
+Let's download a toy dataset with two interesting variables, namely `thick` (thickness of coal) and `soil` (soil quality). We would like to check if there is any relation between these two variables.
+
+Try two models: simple linear regression model with just one dependent variable and a model which takes into account spatial structure of measurements (variables `east` and `north`).
+
+Compare these two models and answer the question: is there a significant relation between variables `thick` (y) and `soil` (dependent variable)?
+
+## Model without considering spatial structure
+
+Firstly, we load the dataset.
+
+```{r, warning=FALSE, message=FALSE}
+spdata <- read.table("http://www.ats.ucla.edu/stat/r/faq/thick.csv", header = T, sep = ",")
+head(spdata)
+```
+
+Then we estimate the simplest possible model:
+
+```{r, warning=FALSE, message=FALSE}
+model0 <- lm(thick ~ soil, data = spdata)
+summary(model0)
+```
+
+We see that the variable is barely significant and the R^2^ is very small.
+
+## Model considering spatial structure
+
+In this section we will check whether taking into account the spacial structure of measurements would improve the fit.
+
+Let us introduce the spacial structure via changing the covariance matrix for the random noise. We will consider several types of correlation and compare them.
+
+```{r, warning=FALSE, message=FALSE}
+library(nlme)
+model1 <- lme(fixed = thick ~ soil, data = spdata, random = ~ 1 | dummy, method = "ML")
+model1.exp <- update(model1, correlation = corExp(form = ~ east + north), method = "ML")
+model1.gaus <- update(model1, correlation = corGaus(form = ~ east + north), method = "ML")
+# model1.lin <- update(model1, correlation = corLin(form = ~ east + north), method = "ML")
+# Error: false convergence (8)
+model1.ratio <- update(model1, correlation = corRatio(form = ~ east + north), method = "ML")
+model1.sphere <- update(model1, correlation = corSpher(form = ~ east + north), method = "ML")
+
+Criteria <- function(model){
+  return( data.frame(AIC = AIC(model), BIC = BIC(model), logLik = logLik(model)) )
+}
+
+models <- list( Exponential = model1.exp,
+                Gaussian = model1.gaus,
+#                Linear = model1.lin,
+                Ratio = model1.ratio,
+                Spherical = model1.sphere
+                )
+
+criteria <- t(matrix(ncol=4,unlist(lapply(models, Criteria))))
+rownames(criteria) <- c("Exponential", "Gaussian", "Ratio", "Spherical")
+colnames(criteria) <- c("AIC", "BIC", "logLik")
+criteria[order(criteria[,3], decreasing = TRUE),]
+```
+
+All three criteria concludes that inverse quadratic correlation structure fits best.
+
+```{r, warning=FALSE, message=FALSE}
+summary(model1.ratio)
+```
+
+Here we see that the `soil` variable is definitely not significant. So including information about spatial structure makes a big difference (for simple linear model we may conclude that `soil` is significant). Therefore it is crucial to test the significance of spatial autocorrelation.
+
+```{r, warning=FALSE, message=FALSE}
+coal.dists <- dist(cbind(spdata$east, spdata$north))
+thick.dists <- dist(spdata$thick)
+library(ade4)
+mantel.rtest(thick.dists, coal.dists, nrepet = 9999)
+
+coal.dists <- as.matrix(coal.dists)
+coal.dists.inv <- 1/coal.dists
+diag(coal.dists.inv) <- 0
+library(ape)
+Moran.I(spdata$thick, coal.dists.inv)$p.value
+```
+
+In both Mantel and Morgan tests we can reject the null hypothesis that there is zero spatial autocorrelation. So the spacial structure is significant and should be included in the model.
+
+## Conclusions
+
+* In the linear model with no spacial structure included we can say that for significance level equal to `0.05` the relation between `thick` and `soil` is significant. But on the other hand only 8% of `thick` variance is explained by variation of `soil`, so the fit is very poor.
+* The correlation between `thick` and place of measurement turned out to be significant, therefore we need to include this information into the model. While taken into consideration, it changes the significance of `soil` variable.
+* **There is no significant relation between `thick` and `soil`**.
+* This data provides a good example how excluding significant information completely changes the conclusions from the model (significant vs insignificant relation between variables).
