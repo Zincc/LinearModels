@@ -1,0 +1,113 @@
+---
+title: "Kinship effects"
+author: "Przemyslaw Biecek"
+date: "Linear models with fixed and random effects"
+output: 
+  html_document:
+    toc: TRUE
+---
+
+# Mice again
+
+Let's find out what has an impact on maximal stress of muscle in Mus Musculus (mice).
+
+```{r, message=FALSE, warning=FALSE}
+library(lme4)
+library(PBImisc)
+library(ggplot2)
+library(coxme)
+require(kinship2)
+
+head(musculus)
+```
+
+# So simple
+
+```{r}
+ggplot(musculus, aes(diet, sigma)) + 
+  geom_boxplot() + geom_jitter(color="grey") + theme_bw()
+  
+summary(lm(sigma~diet, data=musculus))
+```
+
+# Yet observations are not independent
+
+The kinship coefficient is a measure of relatedness between two individuals. It represents the probability that two alleles, sampled at random from each individual are identical.
+
+```{r}
+gped <- with(musculus, pedigree(id, dadid, momid, sex=sex))
+plot(gped)
+
+kmat <- kinship(gped)
+kmat[1:5,1:15]
+```
+
+# Let's add polygenetic effect to the model
+
+```{r}
+mfit <- lmekin(sigma~diet + (1|id), data=musculus, varlist=kmat*2)
+mfit
+
+# Let's compare with
+summary(lm(sigma~diet, data=musculus))
+```
+
+Percentage of inherited variance.
+
+Let's extract variances and then we can see how large is the shared variance.
+
+```{r}
+(sigmaa <- mfit$vcoef$id)
+(sigma0 <- mfit$sigma^2)
+
+sigmaa/(sigmaa+sigma0)
+```
+
+# Other applications
+
+Meta analysis, where data is pulled from different studies.
+
+```{r}
+head(dementia)
+```
+
+We allow fosome individual effects in each study, but overall we are interested in the main effect shared between different studies.
+
+```{r}
+modelFull <- lmer(demscore~age+sex+(age+sex|study), data=dementia, REML=F)
+```
+
+Fixed effects and random deviations
+
+```{r}
+modelFull
+random.effects(modelFull)
+```
+
+Different physicians in different centers
+
+```{r}
+head(eden[,c(1,2,7,8,9,12)])
+
+library(lattice)
+bwplot(BPRS.Average~mdid|center, data=eden, scales=list(x=list( relation="free")))
+
+summary(model <- lm(MANSA~day, data=eden))
+summary(model <- lmer(MANSA~day + (1|center/mdid), data=eden, REML=FALSE))
+```
+
+
+# That's almost the end
+
+What you should remember in modelling
+
+* What about transformations for y?
+* What about transformations for x?
+* Difference between crossed / nested effects
+* Difference between fixed / random effects
+* How to estimate coefficient?
+* How to derive confidence intervals for effects?
+* How to calculate predictions (point / interval)?
+* Model diagnostic
+* How to test effects?
+
