@@ -1,0 +1,79 @@
+---
+title: "Homework for 7 I 2016"
+author: "Micha³ Frej"
+output:
+  html_document:
+    toc: yes
+  pdf_document:
+    toc: yes
+---
+## Wykres czasu reakcji i liczby dni dla ka¿dego kierowcy.
+Zacznijmy od obejrzenia danych.
+```{r,warning=FALSE,message=FALSE}
+library(lme4)
+library(lattice)
+head(sleepstudy)
+dim(sleepstudy)
+summary(sleepstudy)
+xyplot(Reaction ~ Days | Subject,sleepstudy, type = c("g","p","r"),
+  xlab = "Days", ylab = "Reaction time", pch=19)
+```
+
+## Model opisuj¹cy liniowy trend miêdzy czasem reakcji i liczb¹ dni.
+Wykresy dla poszczególnych kierowców s¹ z dobr¹ dok³adnoœci¹ przybli¿one funkcjami liniowymi, wiêc nie ma powodu, by szukaæ przybli¿ej w klasie wielomianów wy¿szego stopnia. Aby unikn¹æ korelacji miêdzy wyrazem wolnym a wspó³czynnikiem nachylenia(³atwiej obliczymy kwantyle rozk³adu tych wspó³czynników) zdecydowa³em siê na poni¿szy model
+```{r,message=FALSE,warning=FALSE}
+model = lmer(Reaction ~ Days +  (Days-1|Subject) + (1|Subject), data=sleepstudy, REML=FALSE)
+summary(model)
+```
+Niestety nasz model jest obarczony sporym b³êdem predykcjio czym œwiadcz¹ wariancje wyrazu wolnego i reszt modelu.
+
+SprawdŸmy czy model jest sensowny testuj¹c reszty,
+```{r,warning=FALSE,message=FALSE}
+reszty <- sleepstudy$Reaction - fitted.values(model)
+qqnorm(reszty)
+qqline(reszty,col="red")
+```
+
+istotnoœæ efektów sta³ych
+```{r,message=FALSE,warning=FALSE}
+tStat <- summary(model)$coeff[,3]
+pValues <- sapply(1:length(tStat),function(i) {2*pnorm(abs(tStat[i]),lower.tail = F)})
+pValues
+```
+
+oraz sens dodawania efektu losowego z³o¿onego z a¿ dwóch sk³adników.
+```{r,message=FALSE,warning=FALSE}
+model2 = lmer(Reaction ~ Days +  (Days-1|Subject) , data=sleepstudy, REML=FALSE)
+model3 = lmer(Reaction ~ Days +  (1|Subject) , data=sleepstudy, REML=FALSE)
+anova(model2,model)
+anova(model3,model)
+```
+
+QQplot nie wygl¹da Ÿle, a wszystkie p-wartoœci s¹ bardzo ma³e, wiêc ka¿dy element naszego modelu wnosi coœ istotnego. Nie ma wiêc powodu, by zrezygnowaæ z tego modelu.
+
+## Trendy dla poszczególnych kierowców.
+```{r,message=FALSE,warning=FALSE}
+rnd <- data.frame(t(fixef(model)+t(ranef(model)$Subject)))
+names(rnd) <- c("Intercept","Slope")
+rnd
+```
+
+Wyestymowane wspó³czynniki wychodz¹ doœæ dziwne bior¹c pod uwagê wyraŸny trend wzrostowy na wszystkich poza jednym wykresie. Jest to spowodowane du¿¹ wariancj¹ b³êdu, o czym ju¿ wspominaliœmy.
+
+##Rozk³ady wspó³czynników trendu.
+Statystyki dla wyrazu wolnego i wspó³czynnika nachylenia prezentuj¹ siê nastêpuj¹co:
+```{r,warning=FALSE,message=FALSE}
+sdGeneral <- attributes(unclass(VarCorr(model))$Subject)$stddev
+kwantyl <- function(poziom,id,wsp){
+      #wsp=1 oznacza wyraz wolny, wsp=2 wspó³czynnik nachylenia prostej
+      m <-model.matrix(model)[id,wsp]*fixef(model)[wsp]
+      qnorm(poziom,mean = m, sd= sdGeneral)
+}
+interceptSummary <- data.frame(A=kwantyl(0.25,1,1),B=kwantyl(0.5,1,1),C=kwantyl(0.75,1,1))
+names(interceptSummary) <- c("1Q","median","3Q")
+interceptSummary
+slopeSummary <- data.frame(A=kwantyl(0.25,2,2),B=kwantyl(0.5,2,2),C=kwantyl(0.75,2,2))
+names(slopeSummary) <- c("1Q","median","3Q")
+slopeSummary
+```
+Oba rozk³ady zgadzaj¹ siê z rysunkami, którew zdecydowanej wiêkszoœci ukazuj¹ rosn¹cy czas reakcji kierowcy, który nie przespa³ kilku nocy z rzêdu.
