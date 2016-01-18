@@ -1,49 +1,117 @@
 ---
-title: "Homework 11"
+title: "Homework Week 12"
 author: "Annanina Koster"
-date: "15 december 2015"
+date: "5 januari 2016"
 output: html_document
 ---
 
-The homework [17 XII]
-For the eunomia study perform following analyses:
-
-Try a post-hoc test for effect of ICD10 to find out which diseases are more likely to produce psychotic behaviours?
-Is it possible you cluster ICD10 groups depending on average level of psychotic behaviours?
-Is it possible to do something similar if ICD10 is coded as random effects?
 
 ---
 
-The purpose of this homework assignment is to investigate the relation between diseases and the level of psychotic behaviour in the EUNOMIA dataset. First, I open the data and take a look at what I've got. I decide on using the BPRS.T2 variable (BPRS - Average score for Brief Psychiatric Rating Scale, measured in times: T1, T2 and T3) to represent the level of psychotic behaviour. I chose it at time T2, because I think that half a year after treatment the most interesting results can be obtained. ICD10 - International Statistical Classification of Diseases and Related Health Problems 10th Revision, was chosen to represent the diseases.
+
+The homework [7 | 2016]
+
+The data sleepstudy (lme4) allow to measure the effect of sleep deprivation of reaction time.
+
+The average reaction time per day for subjects in a sleep deprivation study. On day 0 the subjects had their normal amount of sleep. Starting that night they were restricted to 3 hours of sleep per night. The observations represent the average reaction time on a series of tests given each day to each subject.
+
+With the use of the sleepstudy:
+
+- Plot the relation between Reaction and Days for each subject independently.
+- Build a model with random coefficients for linear trend between Reaction and Days.
+- Extract individual slopes for the relation from the model with random effects. Present summary statistics   of these slopes (1Q, median, 3Q).
+
+
+---
+
+
+First, the data should be loaded and inspected. There are 180 observations. All persons have been observed 10 times, one time every day for 10 days (0-9). Their mean reaction was 298.5.
 
 ```{r, warning=FALSE, message=FALSE}
 
-library(PBImisc)
-summary(eunomia[,c(1:5,9:11,15)])
+library(lme4)
+library(lattice)
+summary(sleepstudy)
+dat <- sleepstudy
+table(dat$Subject)
 
 ```
 
-As can be seen, a lot of different diseases are being considered in this study. Hence, plots will not be very informative. Therefore, a Scheffe post-hoc test for ICD10 will give me more information when ICD10 is modeled as a fixed effect. 
+---
+
+For each Subject, the relation between Reaction and Days looks as follows:
 
 ```{r, warning=FALSE, message=FALSE}
 
-model.fixed <- lm(BPRS.T2 ~ ICD10 + NUM.HOSP, data = eunomia) #GENDER and AGE are not significant when added and CENTRE13 should be coded as a random effect. NUMP.HOSP is significant, so should be added!
-library(agricolae)
-head(scheffe.test(aov(model.fixed), 'ICD10', console = FALSE)$groups)
+xyplot(Reaction ~ Days | Subject, dat, type = c("g","p","r"), index = function(x,y) coef(lm(y ~ x))[1])
 
 ```
 
-According to Scheffe test, for all diseases the average level of psychotic behaviours are equal (they are all in group a). Thus, it is not possible to cluster ICD10 groups depending on average level of psychotic behaviours. It would be clustered as 1 cluster.
+It seems that the relation between Reaction and Days is positive for all Subjects. This could be expected, since it makes sense that the less one sleeps, the slower one will respond. However, this relationship is different for all subjects. This should be included in the model. Moreover, it can be seen that for most subjects the relation in pretty linear! Hence, a linear trend can be modeled!
 
-IF ICD10 is coded as a random effect, only the variance of these diseases compared to the level of psychotic behaviour is known. Hence, ICD10 cannot be clustered into groups with similar averages of BPRS.T2.
+---
 
-```{r, warning=FALSE, message=FALSE}
+I believe that the most suitable model for this dataset would have the variable Days as a fixed effect, because we want to know the effect of the number of days without sleep. Moreover, we would like to distinguish the data per subject. As can be seen in the plots below, log(Reaction) does not make a lot of difference for the normality of the model. It also shows from the ANOVA test.
 
-model.random1 <- lmer(BPRS.T2 ~ NUM.HOSP + (1|ICD10) + (NUM.HOSP|CENTRE13), data = eunomia, REML = FALSE) #this model was found to be best in the lab.
-model.random2 <- lmer(BPRS.T2 ~ NUM.HOSP + (NUM.HOSP|CENTRE13), data = eunomia, REML = FALSE)
-anova(model.random1, model.random2)
+```{r}
+
+par(mfrow=c(1,2))
+hist(dat$Reaction)
+hist(log(dat$Reaction))
+
+mdl0 <- lmer(log(Reaction) ~ Days + (1|Subject), data=dat)
+
+mdl1 <- lmer(Reaction ~ 1 + (1|Subject), data=dat) #model with slope only
+summary(mdl1)
+#here we can see a very high intercept and large differences between subjects
+#moreover, we want to know the linear effect of days, so I include it in the second model
+
+mdl2 <- lmer(Reaction ~ Days + (1|Subject), data=dat)
+summary(mdl2)
+#here we see a much lower intercept, fewer differences between subjects and a slope of 10 for days
+
+anova(mdl0, mdl2)
+#it can be seen that the use of log(Reaction) does not improve the model significantly, hence I will not
+
+anova(mdl1, mdl2)
+#it is shown that the second model is significantly better than the first (for a low p-value always choose the model with the highest degrees of freedom)
+
+mdl3 <- lmer(Reaction ~ Days + (Days|Subject), data=dat)
+summary(mdl3)
+#in this model we also see that the slope of Days may differ per Subject
+#this model is expected to be even better
+
+anova(mdl2, mdl3)
+#model 3 is preferred over model 2!
+
+mdl4 <- lmer(Reaction ~ Days + (Days-1|Subject) + (1|Subject), data=dat)
+summary(mdl4)
+
+anova(mdl3, mdl4)
+#it is found that model 3 is the most preferred model!
 
 ```
 
-This Likelihood Ratio test shows that the random effect ICD10 is indeed signifcant and should be included in the model as the variable it is now, and not as 1 cluster!
+The 'best' model is the model I was expecting!
 
+---
+
+In order to extract the slopes of this relation per Subject:
+
+```{r}
+
+fixef(mdl3)
+head(ranef(mdl3)$Subject)
+randomCoefs = t(t(ranef(mdl3)$Subject) + fixef(mdl3))
+randomCoefs
+#but we need just the slopes, so:
+slopes <- ranef(mdl3)$Subject[,2] + fixef(mdl3)[2]
+slopes
+summary(slopes)
+boxplot(slopes) #to visualize
+
+```
+
+---
+
+In conclusion, almost all subjects got a slower reaction as they got less sleep, which is what we expected since it makes sense!
