@@ -1,0 +1,276 @@
+---
+title: "Project 2, Phase 3"
+author: "Magdalena Bogdańska, Piotr Obarski and Małgorzata Pujszo"
+date: "Linear and Mixed Models with Examples for Biological and Medical Data"
+output: 
+  html_document:
+    toc: true
+---
+
+# 1. Introduction
+It has been observed that abnormalities in human dendritic spines can cause cognitive disorders such as ADHD, autism and intellectual disability. Thus it is believed that functionality of dendritic spines can influence brain cognitive functions. Based on the data on mice with different genomes and treated in different ways one can infer many hypothesis on the role of dendritic spines and affect of treatments.
+
+Our main goal is to verify which treatments affect the length of dendritic spine for different mice. We would also like to find out whether we can distinguish types of mice by giving them different treatments.
+In order to do so we will use statistical model developed in the second phase of the project.
+
+
+# 2. Dataset
+In this project we use the dataset “dendriticSpines”, which contains data from three different studies. 
+
+Apart of studying “control group” (wild type with no genetic modifications) there were included two basic types of genetically modified mice.
+
+Transgenic mouse (TG) is obtained through injection into a single cell of the mouse embryo, thus inserting new genetic information into the mouse genome or to over-express endogenous genes.
+
+Knonckout mouse (KO) has inactivated an existing gene which has been done by modifying embryonic stem cells (replacing or disrupting selected gene with an artificial piece of DNA).
+
+Thus WT, TG and KO mice corresponds to the following number of copy genes: 1, 0, 2. 
+
+Types of treatment in our dataset: 
+
+* lithium
+
+It is used for long-term treatment of bipolar disorder and acute mania [1]. It is sometimes used when other treatments are not effective in a number of other conditions, including major depression, schizophrenia, and some psychiatric disorders in children [2].
+
+* DMSO (dimethyl sulfoxide) 
+
+It has been examined for the treatment of numerous conditions and diseases, but in US its use has been approved only for the symptomatic relief of patients with bladder pain syndrome [3]. DMSO is marketed as an alternative medicine for cancer as it has been shown to interfere with a variety of chemotherapy drugs [4], but The American Cancer Society lists DMSO as an ineffective alternative cancer cure.
+
+* chiron
+
+* gm
+
+It can stand for GM-CSF (Granulocyte-Macrophage Colony Stimulating Factor, a white blood cell growth factor) or, more probably, General Medical (GM) treatments for mental health disorders.
+
+
+Unfortunately studies in our dataset were only investigating lenghts of dendritic spines for two kinds of treatments and two types of mice making analysis of data the non-trivial task.
+
+
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
+library(ggplot2)
+library(car)
+library(lme4)
+library(MASS)
+library(agricolae)
+library(lattice)
+library(multcomp)
+library(plyr)
+library(knitr)
+library(PBImisc)
+library(Rmisc)
+load("dendriticSpines.rda")
+dataset <- dendriticSpines
+
+data.gm <- subset(dataset, Study=="gm")
+
+for (i in sort(unique(data.gm$Animal))) {
+  dataset$Animal[which(dataset$Animal==i & dataset$Study=="gm")] <- 100+i
+}
+
+data.gm <- subset(dataset, Study=="gm")
+
+for (i in sort(unique(data.gm$Animal))) {
+  dataset$Animal[which(dataset$Animal==i & dataset$Study=="gm" & dataset$mouse=="TG")] <- 100+i
+}
+```
+
+
+# 3. Results: differences in the length of dendritic spine for different mice
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
+model1<-lmer(log(length)~mouse*treatment + (1|Animal/Photo_ID_abs), data=dataset, REML=FALSE)
+  
+test<-matrix(0, nrow=3, ncol=5)
+rownames(test)<-c("KO", "TG", "WT")
+colnames(test)<-c("-","chiron","dmso","gm","li")
+temp<-dataset[1,6:7]
+
+for(i in 1:3) {
+  for(j in 1:5) {
+  temp[1,]<-c(rownames(test)[i], colnames(test)[j])  
+  test[i,j]<-predict(model1,re.form=NA,newdata=temp)
+  }
+}
+test<-exp(test)
+
+dataset$mouse_treatment <- interaction(dataset$mouse, dataset$treatment)
+dataset$mouse_treatment <- factor(dataset$mouse_treatment)
+model2 <- lmer(log(length) ~ mouse_treatment + (1|Animal/Photo_ID_abs), data=dataset, REML=FALSE)
+
+post <- glht(model2, linfct=mcp(mouse_treatment="Tukey"))
+```
+
+The main results are presented on the barplot below. Bars are sorted with respect to the type of mice. If two bars have the same colours it means that there is no statistically significant difference between the corresponding groups. 95% confidence intervals are also plotted.
+
+```{r, message=FALSE, warning=FALSE, fig.height=5, fig.width=8.5, echo=FALSE}
+#results from post-hoc written in terms of groups
+groups <- data.frame(levels=levels(dataset$mouse_treatment), groups=c("b", "a", "d", "cd", "c", "cd", "cd", "cd", "b", "b"))
+groups <- arrange(groups, groups)
+
+for (x in levels(dataset$mouse_treatment)) {
+  dataset$group[which(dataset$mouse_treatment==x)] <- as.character(groups$groups[groups$level==x])
+}
+dataset$group <- factor(dataset$group)
+
+lower <- function(x) {
+  CI(x, ci=0.95)[3]
+}
+upper <- function(x) {
+  CI(x, ci=0.95)[1]
+}
+
+ggplot(data=dataset, aes(x=mouse_treatment, y=length, fill=group)) + stat_summary(fun.y= mean, geom="bar") +ggtitle("Mean length of dendritic spine")  + ylab("Length") + xlab("Type of mice and treatment") + scale_x_discrete(limits=c("KO.-", "KO.li", "WT.li", "WT.-", "WT.chiron", "WT.gm", "WT.dmso", "TG.chiron", "TG.gm", "TG.dmso")) + stat_summary(fun.ymax=upper, fun.ymin=lower, geom="errorbar")
+```
+
+We summarize those results also in a form of table:
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
+kable(groups)
+```
+
+We present also mean values of length predicted by our model. 
+
+```{r,  message=FALSE, warning=FALSE, echo=FALSE}
+kable(test)
+```
+
+However some of the values have to be considered with caution, because we didn't have observations for every type of mice and every treatment (e.g. knockout mice with chiron treatment).
+
+We display interaction plot which takes into account different studies in our dataset.
+
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
+ggplot(data=dataset, aes(x=mouse, y=log(length), group=interaction(treatment, Study), colour=treatment, linetype=Study)) + stat_summary(fun.y= mean, geom="line") + stat_summary(fun.y= mean, geom="point", aes(shape=group), size=4) +ggtitle("Interaction of mouse type and treatment") + scale_x_discrete(limits=c("KO", "WT", "TG"))
+```
+
+# 4. Conclusions
+
+* for KO mice treatment with lithium doesn't affect the length of dendritic spine;
+
+* for WT mice treatments chiron, gm and dmso have the same effect and they cause the increase in the length of dendritic spine. Also treatment with lithium is important but it acts contrary to the previous because it diminishes length of dendritic spine. 
+
+* for TG mice dendritic spines reacts differently on each type of treatment, but gm shares some similarities with chiron and dmso
+
+# 5. Literature
+
+[1] webpage of National Alliance of Mental Illness
+https://www.nami.org/Learn-More/Treatment/Mental-Health-Medications/Lithium
+
+[2] The American Society of Health-System Pharmacists
+http://www.drugs.com/monograph/lithium-salts.html
+
+[3] Shirley, Stewart, Mirelman, 
+"Dimethyl sulfoxide in treatment of inflammatory genitourinary disorders"
+Urology. 1978 Mar;11(3):215-20
+
+[4] Hall, Telma, Chang, Lee, Madigan, Lloyd, Goldlust, Hoeschele, Gottesman 
+"Say No to DMSO: Dimethylsulfoxide Inactivates Cisplatin, Carboplatin and Other Platinum Complexes"
+Cancer Research 74 (14): 3913–22
+
+
+# A. Appendix 
+
+## A.1. Mixed-effects model
+
+First we build additional variable "mouse_treatment" describing interactions between variables "mouse" and "treatment". We use it subsequently as a fixed effects and use random effects as in the previous phase of project.
+
+Our model is then of a following form:
+
+log(length) ~ mouse_treatment + (1|Animal/Photo_ID_abs).
+
+The corresponding code is the following:
+```{r,  message=FALSE, warning=FALSE, eval=FALSE}
+dataset$mouse_treatment <- interaction(dataset$mouse, dataset$treatment)
+dataset$mouse_treatment <- factor(dataset$mouse_treatment)
+model2 <- lmer(log(length) ~ mouse_treatment + (1|Animal/Photo_ID_abs), data=dataset, REML=FALSE)
+```
+
+## A.2. Post-hoc tests
+
+Using new variable "mouse_treatment" is  equivalent to use variables "mouse", "treatment" and theirs interactions, but it allows us to use the built-in test "glht" (General Linear Hypotheses), which can be built for mixed effects models and for each pair of levels from variable "mouse_treatment" will test the hypothesis of equal means. 
+
+```{r, eval=FALSE}
+post <- glht(model2, linfct=mcp(mouse_treatment="Tukey"))
+```
+
+```{r, warning=FALSE, message=FALSE, fig.height=12, fig.width=10}
+summary(post)
+par(mar=c(5, 10, 3, 3))
+plot(post)
+```
+
+## A.3. Permutation tests
+
+In order to cofirm the results of post-hoc testing, we have also done permutation tests. We permutated type of treatment for certain type of mouse.
+If p-value obtained is lower than 0.05 then treatments are considered to be statistically different, otherwise they have the same effect on dendritic spine.
+
+### A.3.1. KO mice 
+
+For KO mice we had only two levels of variable treatment.
+
+```{r, message=FALSE, warning=FALSE}
+N=500
+logs = replicate(N, {
+  dataset$treatment[which(dataset$mouse=="KO")]=sample(dataset$treatment[which(dataset$mouse=="KO")])
+  logLik(lmer(log(length) ~ mouse*treatment +(1|Animal/Photo_ID_abs), data=dataset, REML=FALSE))})
+
+mean(logs > logLik(model1))
+```
+ 
+
+### A.3.2. TG mice
+
+* treatments gm and dmso
+
+```{r, message=FALSE, warning=FALSE}
+logs = replicate(N, {
+  dataset$treatment[intersect(which(dataset$mouse=="TG"), which(dataset$treatment=="gm" | dataset$treatment=="dmso"))]=sample(dataset$treatment[intersect(which(dataset$mouse=="TG"), which(dataset$treatment=="gm" | dataset$treatment=="dmso"))])
+  logLik(lmer(log(length) ~ mouse*treatment +(1|Animal/Photo_ID_abs), data=dataset, REML=FALSE))})
+
+mean(logs > logLik(model1))
+```
+
+* treatments gm and chiron
+
+```{r, message=FALSE, warning=FALSE}
+logs = replicate(N, {
+  dataset$treatment[intersect(which(dataset$mouse=="TG"), which(dataset$treatment=="gm" | dataset$treatment=="chiron"))]=sample(dataset$treatment[intersect(which(dataset$mouse=="TG"), which(dataset$treatment=="chiron" | dataset$treatment=="gm"))])
+  logLik(lmer(log(length) ~ mouse*treatment +(1|Animal/Photo_ID_abs), data=dataset, REML=FALSE))})
+
+mean(logs > logLik(model1))
+```
+
+For TG mice treatments gm and dmso are different and mean length in group treated with gm is between means for chiron and dmso, we can infer that treatments dmso and chiron are statistically different. Treatments gm and chiron are the same.
+
+### A.3.3. WT mice
+
+* treatments chiron and dmso
+
+```{r, message=FALSE, warning=FALSE}
+logs = replicate(N, {
+  dataset$treatment[intersect(which(dataset$mouse=="WT"), which(dataset$treatment=="dmso" | dataset$treatment=="chiron"))]=sample(dataset$treatment[intersect(which(dataset$mouse=="WT"), which(dataset$treatment=="chiron" | dataset$treatment=="dmso"))])
+  logLik(lmer(log(length) ~ mouse*treatment +(1|Animal/Photo_ID_abs), data=dataset, REML=FALSE))})
+
+mean(logs > logLik(model1))
+```
+
+For WT mice treatments chiron and dmso have the same affect. Moreover mean length in group treated with gm is between means for chiron and dmso, we can infer that  effects of all three treatments (gm, chiron, dmso) are statistically the same for WT mice.
+
+
+* treatments chiron and -
+
+```{r, message=FALSE, warning=FALSE}
+logs = replicate(N, {
+  dataset$treatment[intersect(which(dataset$mouse=="WT"), which(dataset$treatment=="-" | dataset$treatment=="chiron"))]=sample(dataset$treatment[intersect(which(dataset$mouse=="WT"), which(dataset$treatment=="-" | dataset$treatment=="chiron"))])
+  logLik(lmer(log(length) ~ mouse*treatment +(1|Animal/Photo_ID_abs), data=dataset, REML=FALSE))})
+
+mean(logs > logLik(model1))
+```
+
+* treatments - and li
+
+```{r, message=FALSE, warning=FALSE}
+logs = replicate(N, {
+  dataset$treatment[intersect(which(dataset$mouse=="WT"), which(dataset$treatment=="-" | dataset$treatment=="li"))]=sample(dataset$treatment[intersect(which(dataset$mouse=="WT"), which(dataset$treatment=="-" | dataset$treatment=="li"))])
+  logLik(lmer(log(length) ~ mouse*treatment +(1|Animal/Photo_ID_abs), data=dataset, REML=FALSE))})
+
+mean(logs > logLik(model1))
+```
+
+Results of permutation tests are similar to results from post-hoc testing.
