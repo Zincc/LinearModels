@@ -1,0 +1,32 @@
+The format is very good.
+Plot with confidence intervals is very good.
+Appendix is very good.
+
+But I prefer the previous model with interactions. It was better than the one without interactions.
+
+
+1. Which treatments are selected as important?
+
+All except – 
+Some post hoc test would give more information if there are differences between gm/dsmo.
+For mice effect WT should be selected as baseline (instead of KO)
+
+2. How the effects of these treatments are presented?
+
+Table and plot with effects.
+The plot is very good.
+But I would like to see it for all interactions treatment:mice
+
+3. Do you choose right tests for the task?
+
+Some R code is hidden, so it is hard to guess what the 'model.version1' stands for (of course it is possible from Rmd code).
+Model diagnostic is good.
+Structure of random effects is good.
+Only lack of interactions is not good.
+And here I do not see any test that justifies the lack of interactions.
+
+
+Points
+7/8 + 6/8 + 6/8 + 1 = 20
+
+
