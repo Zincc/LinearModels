@@ -1,0 +1,65 @@
+\documentclass[a4paper,11pt,twoside,openany]{article}
+\usepackage[OT4,MeX]{polski}
+\usepackage[utf8]{inputenc}
+
+\begin{document}
+\section*{Linear models with random and fixed effects}
+
+\subsection*{Consider}
+
+\begin{itemize}
+\item A dataset
+ 
+\begin{tabular}{c c}
+y & x \\ \hline
+4 & A \\
+3 & A \\
+2 & B \\
+1 & B \\
+\end{tabular}
+
+\item A model $M_1$ of the form (with the use of lm notation) \verb'y~x'.
+
+\item A model $M_2$ of the form (with the use of lmer notation) \verb'y~(1|x)'.
+
+\end{itemize}
+
+\subsection*{Solve}
+
+\begin{enumerate}
+\item Find the design matrix $X$ for model $M_1$,
+\item Find the joint distribution of $(\hat \mu, \hat \beta_X)$ for model  $M_1$ and data from Table $1$. Draw contours of this distribution. Here you may assume that $\mu$ and $\beta_X$ are known, 
+\item Find the distribution of prediction $\hat y$ for $x=A$ under model $M_1$ and data from Table $1$,
+\item Find the subspace $K$ orthogonal to subspace spanned by design matrix $X$ derived for model $M_2$,
+\item Write down the REML likelihood for model $M_2$ and data presented in Table $1$,
+\item Write down Henderson equations for model $M_2$ and data presented in Table $1$. Here you may use R to find numerical estimate for $\sigma_x^2$.
+\end{enumerate}
+
+\subsection*{Hint}
+
+If some additional assumptions are \textbf{really} needed to solve any of following task you can introduce them. But justify it.
+
+\subsection*{Literature}
+
+Feel free to use any source. Everything related to our course is in
+
+\begin{itemize}
+\item \textit{Analiza danych z programem R, Modele liniowe z efektami stałymi, losowymi i mieszanymi}, Biecek Przemysław, PWN, 2011.
+\item \textit{Linear Mixed-Effects Models Using R}, Gałecki Andrzej, Burzykowski Tomasz, Springer, 2013
+\end{itemize}
+
+\end{document}
+
+
+\item A random mechanism $M$ 
+$$
+y = 1_{x = A} + \varepsilon
+$$
+where
+$$
+\varepsilon \sim \mathcal N(0,1).
+$$
+
+
+
+
