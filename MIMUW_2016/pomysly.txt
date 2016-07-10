@@ -1,0 +1,4 @@
+Dodać modelowanie nieliniowe i wielowymiarowe zgodnie z 
+Regression Modeling Strategies and the rms Package
+Frank Harrell
+http://biostat.mc.vanderbilt.edu/tmp/course.pdf
