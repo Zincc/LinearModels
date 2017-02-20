@@ -40,8 +40,27 @@ Projekty, które nie będą zaprezentowane nie zostaną ocenione.
 
 ## Projekt 1 
 
+Czynniki wpływające na wyniki z matematyki PISA 2015
+
+* 15% Analiza jednowymiarowa wybranych zmiennych z kwestionariusza (binus za uwzględnienie zawodu rodzica)
+* 30% Analiza wielowymiarowa wybranych zmiennych
+* 15% Diagnostyka modelu
+* 10% Wizualizacja modelu
+* 20% Raport opisujący uzyskane wyniki oraz wnioski z modelowania
+* 10% Czy znaleziono ,,interesujący'' model, niewielki ale wyjaśniający to co istotne.
+
+Do inspiracji:
+
+* Dane PISA 2015 są dostępne na stronie http://www.oecd.org/pisa/data/2015database/. 
+* Krótka instrukcja jak wczytać te dane znajduje się tutaj http://smarterpoland.pl/index.php/2016/12/pisa-2015-how-to-readprocessplot-the-data-with-r/.
+* Przykładowy kwestionariusz https://github.com/pbiecek/WarsztatyBadawcze/blob/master/MiNI_2017/materialy/EnglishStudentQuestionnaire.pdf
+* Podręcznik analizy danych PISA
+https://github.com/pbiecek/WarsztatyBadawcze/blob/master/MiNI_2017/materialy/SPSS_Analysis_Manual.pdf
+* Omowienie części wyników z badania PISA 2015 https://github.com/pbiecek/WarsztatyBadawcze/blob/master/MiNI_2017/materialy/PISA_2015_results.pdf
 
 ## Projekt 2
+
+TBA
 
 
 Ocena:
