@@ -64,3 +64,10 @@ Maksymalna liczba punktów to uzyskania to 200. Oceny
 
 Zaliczenie jest tak skonstruowane by premiować systematyczną pracę - projekty i prace domowe.
 
+Materiały
+---------
+
+* Analiza danych z programem R, Modele liniowe z efektami stałymi, losowymi i mieszanymi, Przemysław Biecek, http://biecek.pl/R/#Analiza
+* Practical Regression and Anova using R, Julian J. Faraway, ftp://cran.r-project.org/pub/R/doc/contrib/Faraway-PRA.pdf
+* Regression Modeling Strategies, Frank E Harrell, http://biostat.mc.vanderbilt.edu/tmp/course.pdf
+
