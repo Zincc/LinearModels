@@ -53,13 +53,14 @@ Na ocenę składają się trzy składniki:
 * Punkty z prac domowych (nieobowiązkowe). Z każdej pracy domowej można uzyskać do 5 punktów. Pracę domową można oddać tylko w ciągu tygodnia od jej zadania na wykładzie.
 * Punkty z końcowego egzaminu (nieobowiązkowe). W sumie z egzaminu można otrzymać do 50 punktów.
 
-Maksymalna liczba punktów to uzyskania to 200.
-* 0-69 - 2
-* 70-90 - 3
-* 91-110 - 3,5
-* 111-130 - 4
-* 131-150 - 4,5
-* 151+ - 5
+Maksymalna liczba punktów to uzyskania to 200. Oceny
+
+* 0-69: 2
+* 70-90: 3
+* 91-110: 3,5
+* 111-130: 4
+* 131-150: 4,5
+* 151+: 5
 
 Zaliczenie jest tak skonstruowane by premiować systematyczną pracę - projekty i prace domowe.
 
