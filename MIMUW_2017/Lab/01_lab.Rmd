@@ -1,0 +1,25 @@
+---
+title: "Diagnostyka - Laboratorium"
+author: "Przemyslaw Biecek"
+date: "Modele liniowe i mieszane"
+output: 
+  html_document:
+    toc: TRUE
+---
+
+W pakiecie `PBImisc` znajdują się dwa zbiory danych `heights` i `genomes`.
+
+0. Wykorzystaj rmarkdown do zbudowania dokumentu html, z opisem poniższych analiz.
+
+1. Wczytaj ten zbiór danych. 
+Dla pierwszego zbuduj model pomiędzy wzrostem syna i ojca. Dla drugiego dla różnych genomów znajdują się w nim między innymi informacje o wielkości genomu oraz średnim współczynniku GC (udział zasad G lub C w genomie).
+
+2. Przedstaw graficznie zależność pomiędzy cechami. Sprawdź czy transformacja (np. logarytm) nie poprawi liniowości modelu.
+
+3. Wyznacz model liniowy dla obu powyższych zależności używając funkcji `lm()`.
+
+4. Użyj funkcji `plot()` aby wyznaczyć wykresy diagnostyczne.
+
+5. Użyj funkcji `rstandard`, `rstudent`, `cooks.distance` aby wyznaczyć reszty i miary wpływu.
+
+6. Zapoznaj się z testami (pakiet `lmtest`) `bptest`, `gqtest`, `hmctest`, `dwtest`, `bgtest`, `harvtest`, `raintest`, `resettest`, `shapiro.test`.
