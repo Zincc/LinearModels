@@ -6,6 +6,8 @@ Modele liniowe z efektami stałymi, losowymi i mieszanymi
 > Essentially, all models are wrong, but some are useful.
 > George Box
 
+[Do obejrzenia](https://www.ted.com/talks/jack_horner_shape_shifting_dinosaurs) jako luźne wprowadzenie do przedmiotu.
+
 
 Plan spotka&#324; MIM UW:
 -------------------------
@@ -20,7 +22,7 @@ Planowana tematyka spotkań (może ulec drobnym zmianom w trakcie semestru)
 
 * 2017-03-21 - Model hierarchiczny
 * 2017-03-28 - Wybór modelu
-* 2017-04-04 - Prezentacja projektu 1
+* 2017-04-04 - Prezentacja projektu
 
 * 2017-04-11 - Jeden składnik losowy
 * 2017-04-25 - Dwa składniki losowe (zagnieżdzone/hierarchincze)
@@ -28,28 +30,38 @@ Planowana tematyka spotkań (może ulec drobnym zmianom w trakcie semestru)
 
 * 2017-05-16 - Model regresji logistycznej i Poissona
 * 2017-05-23 - Bayesowska estymacja 
-* 2017-05-30 - Prezentacja projektu 2
+* 2017-05-30 - Prezentacja projektu
 
-Projekty:
+Projekt:
 ---------
 
-Projekty mogą być realizowane w grupach od 2 do 3 osób. Te same osoby nie mogą razem uczestniczyć w obu projektach.
-Projekty będą przedstawiane na zajęciach (terminy wypisane powyżej). Należy je zgłosić przez GitHuba przed prezentacją.
+Projekt może być realizowany w grupach od 1 do 3 osób. 
+Projekty będą przedstawiane na zajęciach (terminy wypisane powyżej), 
+ale też, z uwagi na złożoność, silnie zalecane jest konsultowanie postępów prac w trakcie semestru. 
 Tygodniowo na projekt przeznaczona jest jedna dodatkowa godzina, jest to czas na przedstawianie etapów pośrednich projektu.
 Projekty, które nie będą zaprezentowane nie zostaną ocenione.
 
-## Projekt 1 
+## Projekt
 
-Czynniki wpływające na wyniki z matematyki PISA 2015
+### Czynniki wpływające na czas rozwiązywania zadań z matematyki PISA 2015
 
-* 15% Analiza jednowymiarowa wybranych zmiennych z kwestionariusza (binus za uwzględnienie zawodu rodzica)
-* 30% Analiza wielowymiarowa wybranych zmiennych
-* 15% Diagnostyka modelu
-* 10% Wizualizacja modelu
-* 20% Raport opisujący uzyskane wyniki oraz wnioski z modelowania
-* 10% Czy znaleziono ,,interesujący'' model, niewielki ale wyjaśniający to co istotne.
+Zaliczenie projektu odbywa się w etapach, poniżej opisane są wymagania na każdy etap zaliczenia. 
+Kolejne etapy oddaje się/zalicza po kolei, ale oddać etap X+1 trzeba mieć zaliczony etap X.
+Pełne rozwiązanie określonego etapu jest równowazne uzyskaniu określonej liczby punktów.
+Każdy etap przed oceną musi był zgłoszony na GitHub.
 
-Do inspiracji:
+* etap 1 - 10pkt - Model liniowy zbudowany na cechach zadania (id zadania, pozycja w kwestionariuszu)
+* etap 2 - 20pkt - Diagnostyka i wizualizacja modelu z etapu 1
+* etap 3 - 30pkt - Model zbudowany na cechach zadania i ucznia (płeć, kraj, kwestionariusz)
+* etap 4 - 40pkt - Diagnostyka i wizualizacja modelu z etapu 2
+* etap 5 - 50pkt - Rozważenie i weryfikacja występowania i istotności interakcji pomiędzy kluczowymi elementami modelu.
+* etap 6 - 60pkt - Weryfikacja potrzeby i poprawny wybór transformacji/kodowania dla zmiennych zależnych i niezależnych.
+* etap 7 - 70pkt - Model mieszany na cechach zadania i ucznia z poprawnie wskazanymi efektami losowymi/stałymi.
+* etap 8 - 80pkt - Uwzglednienie wag w procesie budowy i walidacji modelu.
+* etap 9 - 90pkt - Diagnostyka i wizualizacja modelu z etapu 8
+* etap 10 - 100pkt - Przygotowanie krótkiego reprodukowalnego raportu podsumowującego najistotniejsze wyniki modelu (w jezyku angielskim, do 4 stron)
+
+Dla inspiracji:
 
 * Dane PISA 2015 są dostępne na stronie http://www.oecd.org/pisa/data/2015database/. 
 * Krótka instrukcja jak wczytać te dane znajduje się tutaj http://smarterpoland.pl/index.php/2016/12/pisa-2015-how-to-readprocessplot-the-data-with-r/.
@@ -58,28 +70,24 @@ Do inspiracji:
 https://github.com/pbiecek/WarsztatyBadawcze/blob/master/MiNI_2017/materialy/SPSS_Analysis_Manual.pdf
 * Omowienie części wyników z badania PISA 2015 https://github.com/pbiecek/WarsztatyBadawcze/blob/master/MiNI_2017/materialy/PISA_2015_results.pdf
 
-## Projekt 2
-
-TBA
-
 
 Ocena:
 ------
 
 Na ocenę składają się trzy składniki:
 
-* Punkty z projektów. Z każdego projektu można otrzymać do 50 punktów
-* Punkty z prac domowych (nieobowiązkowe). Z każdej pracy domowej można uzyskać do 5 punktów. Pracę domową można oddać tylko w ciągu tygodnia od jej zadania na wykładzie.
-* Punkty z końcowego egzaminu (nieobowiązkowe). W sumie z egzaminu można otrzymać do 50 punktów.
+* Ocena z projektu. To główny składnik wchodzący do końcowego zestawienia, można uzyskać do 100 punktów.
+* Punkty z prac domowych (nieobowiązkowe). Prace domowe należy zgłaszać przez GitHub w ciągu tygodnia od ogłoszenia pracy domowej. Za rozwiązanie wszystkich prac domowych otrzymuje się 25 punktów. Mniej rozwiązanych prac domowych to proporcjonalnie mniej punktów. Prac będzie od 7 do 10.
+* Punkty z końcowego egzaminu (nieobowiązkowy). Egzamin pisemny z którego można uzyskac do 25 punktów.
 
-Maksymalna liczba punktów to uzyskania to 200. Oceny
+Maksymalna liczba punktów to uzyskania to 150. Oceny
 
-* 0-69: 2
-* 70-90: 3
-* 91-110: 3,5
-* 111-130: 4
-* 131-150: 4,5
-* 151+: 5
+* 0-49: 2
+* 50-69: 3
+* 70-89: 3,5
+* 90-109: 4
+* 110-129: 4,5
+* 130+: 5
 
 Zaliczenie jest tak skonstruowane by premiować systematyczną pracę - projekty i prace domowe.
 
