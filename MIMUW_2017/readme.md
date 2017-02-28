@@ -16,7 +16,7 @@ Formuła zajęć: 2w + 2l + 1p
 
 Planowana tematyka spotkań (może ulec drobnym zmianom w trakcie semestru)
 
-* 2017-02-28 - Diagnostyka modelu
+* 2017-02-28 - Diagnostyka modelu, [Lab](https://github.com/pbiecek/LinearModels/blob/master/MIMUW_2017/Lab/01_lab.html)
 * 2017-03-07 - Analiza wariancji i testy post hoc
 * 2017-03-14 - Analiza interakcji dwu i wielo kierunkowa
 
