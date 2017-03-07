@@ -4,7 +4,8 @@ author: "Przemyslaw Biecek"
 date: "Modele liniowe i mieszane"
 output: 
   html_document:
-    toc: TRUE
+    toc: true
+    toc_float: true
 ---
 
 # Use Case 1: Leukaemia
