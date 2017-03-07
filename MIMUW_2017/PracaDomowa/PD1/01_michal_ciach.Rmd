@@ -1,0 +1,328 @@
+---
+title: "01_lab"
+output: html_document
+---
+
+0. Wykorzystaj rmarkdown do zbudowania dokumentu html, z opisem poniższych analiz.
+
+1. Wczytaj ten zbiór danych. 
+Dla pierwszego zbuduj model pomiędzy wzrostem syna i ojca. Dla drugiego dla różnych genomów znajdują się w nim między innymi informacje o wielkości genomu oraz średnim współczynniku GC (udział zasad G lub C w genomie).
+
+```{r}
+library(PBImisc)
+library(ggplot2)
+library(stringr)
+library(lmtest)
+data(heights)
+data(genomes)
+help(heights)
+```
+
+2. Przedstaw graficznie zależność pomiędzy cechami. Sprawdź czy transformacja (np. logarytm) nie poprawi liniowości modelu.
+
+3. Wyznacz model liniowy dla obu powyższych zależności używając funkcji `lm()`.
+
+4. Użyj funkcji `plot()` aby wyznaczyć wykresy diagnostyczne.
+
+5. Użyj funkcji `rstandard`, `rstudent`, `cooks.distance` aby wyznaczyć reszty i miary wpływu.
+
+# Heights dataset
+
+```{r}
+heights[1:4, ]
+ggplot(data=heights) + geom_histogram(aes(x=Husband))
+ggplot(data=heights) + geom_histogram(aes(x=Wife))
+
+hgt_lm <- lm(Wife~Husband, data=heights)
+hgts_model <- cbind(heights, data.frame('var'=heights$Husband, 'obs'=heights$Wife, 'fit'=hgt_lm$fit, 'rstudent'=rstudent(hgt_lm), 'hat'=hatvalues(hgt_lm), 'cooks'=cooks.distance(hgt_lm)))
+hgts_model$'ID' <- 1:nrow(hgts_model)
+error_var <- sum((hgts_model$obs - hgts_model$fit)^2)/(nrow(hgts_model))
+```
+
+### Fitting results:
+```{r}
+summary(hgt_lm)
+ggplot(data=hgts_model) + geom_point(aes(x=var, y=obs)) + geom_abline(intercept=hgt_lm$coef[1], slope=hgt_lm$coef[2], col="red")
+```
+
+The slope and intercept are statistically significant.
+
+### Diagnostics
+##### Residues distribution:
+```{r}
+qplot(hgts_model$fit - hgts_model$obs, geom="histogram")
+qplot(hgts_model$rstudent, geom="histogram")
+residual.data <- data.frame('res'=sort(hgts_model$rstudent))
+residual.data$'emp.cdf' <- 1:nrow(residual.data)/nrow(residual.data)
+residual.data$'th.quant' <- qnorm(residual.data$'emp.cdf')
+ggplot(data=residual.data, aes(x=th.quant, y=res)) + geom_point() + geom_abline(col='red')
+qqnorm(hgts_model$rstudent)
+```
+
+The residues have a fairly normal composition, but are skewed - the distribution of wifes' height is more dispersed for lower heights.
+
+##### Residues vs hatvalues:
+```{r}
+ggplot(data=hgts_model) + geom_text(aes(x=hat, y=rstudent, label=ID)) + geom_abline(slope=0, col='red') + ggtitle("Residues vs leverages")
+```
+
+
+No significantly deviant observations with high leverage; Observations 39 and 72 a little suspicious.
+
+##### Cook's distance:
+```{r}
+ggplot(data=hgts_model) + geom_text(aes(x=fit, y=cooks, label=ID))
+ggplot(data=hgts_model) + geom_text(aes(x=rstudent, y=cooks, label=ID))
+ggplot(data=hgts_model) + geom_text(aes(x=hat, y=cooks, label=ID))
+```
+
+Another potential outlier is the observation 12. 
+
+##### Visualisation of potential outliers
+```{r}
+hgts_model$"Outlier" = factor(0, levels=c(0, 1))
+hgts_model$"Outlier"[c(12, 72, 39)] = 1
+ggplot(data=hgts_model) + geom_text(aes(x=var, y=obs, col=Outlier, label=ID)) + geom_abline(intercept=hgt_lm$coef[1], slope=hgt_lm$coef[2], col="red")
+```
+
+Observation 12 is a potential outlier, but since it's surrounded by many observations it does not influence the model.
+```{r}
+hgts_model[12,c("Husband", "Wife")]
+```
+
+# Genomes dataset
+
+### Scaling the data 
+
+```{r}
+data(genomes)
+names(genomes)
+#genomes$size <- genomes$size - mean(genomes$size)
+genomes$size <- genomes$size/sd(genomes$size)
+#genomes$GC <- genomes$GC - mean(genomes$GC)
+genomes$GC <- genomes$GC/sd(genomes$GC)
+```
+
+### Transformations:
+```{r}
+qplot(genomes$size, genomes$GC)
+qplot(log(genomes$size), genomes$GC)
+qplot(sqrt(genomes$size), genomes$GC)
+qplot(genomes$size, sqrt(genomes$GC))
+
+```
+
+Logarithmic and square root transformations of independent variable seem best. Taking square root of GC doesn't change much so I'll pass on it.
+
+### Models:
+```{r}
+genome_lm <- lm(GC~size, data=genomes)
+log_lm <- lm(GC~log(size), data=genomes)
+sqrt_lm <- lm(GC~sqrt(size), data=genomes)
+double_sqrt_lm <- lm(GC~sqrt(sqrt(size)), data=genomes)  # this transform was inspired by the diagnostic plots, which showed that the square root transform performed better than the log transform
+models <- list('raw.size'=genome_lm, 'log.size'=log_lm, 'sqrt.size'=sqrt_lm, 'double_sqrt.size'=double_sqrt_lm)
+```
+
+### Results:
+```{r}
+genome_summaries <- lapply(models, function(m) as.data.frame(cbind("org"=factor(genomes$organism), "group"=factor(genomes$group), "size"=genomes$size, "GC"=genomes$GC, predict(m, interval="confidence"), 'hat'=hatvalues(m), 'res'=rstudent(m))))
+genome_RSS <- lapply(models, function(m) sum(m$residuals^2))
+for(model_name in names(models)){
+  p <- ggplot(data=genome_summaries[[model_name]]) +geom_point(aes(x=size, y=GC, col=group)) + geom_line(aes(x=size, y=fit), col="red") + geom_ribbon(aes(x=size, ymin=lwr, ymax=upr), alpha=0.1, fill='orange') + ggtitle(model_name, subtitle=str_c("RSS = ", genome_RSS[[model_name]]))
+  show(p)
+}
+```
+
+The best fit (lowest RSS) is for the double square (i.e. fourth) root of the genome size. However, different groups seem to exhibit different dependencies, which suggests taking some test to check this. But first, let's do some diagnostics: 
+
+
+```{r}
+for(n in names(models)){
+  plot(models[[n]], sub.caption = n)
+}
+```
+
+The dependence of residuals on fitted values is most linear for the square root and the double square root transform, which suggest that they are better than the log transform (even thoug the log transform has lower RSS than the square root transform). The variance seems to be heteroskedastic, being the largest for medium genome sizes (which may be because those genomes are probably the most common ones). There is one rather influential outlier for non-transformed data, which vanishes after taking any transformation.
+
+### More diagnostics
+
+##### Breusch-Pagan (bptest): heteroskedasticity
+```{r}
+for(n in names(models)){
+  print(n)
+  show(bptest(models[[n]]))
+}
+```
+
+The variance is indeed heteroskedastic (except maybe for non-transformed genome size, but it's not a good model).
+
+##### Goldfeld-Quandt (gqtest): heteroskedasticity
+
+```{r}
+for(n in names(models)){
+  print(n)
+  show(gqtest(models[[n]], point=0.3, alternative="less"))
+}
+```
+
+
+After one-third of the observations the variance decreases (but not after one-fifth, i.e. for `point=0.2`).
+
+##### Harrison-McCabe (hmctest): heteroskedasticity again
+
+```{r}
+for(n in names(models)){
+  print(n)
+  show(hmctest(models[[n]], point=0.5))
+}
+```
+
+This test checks which fraction of RSS is generated by a given fraction of data, so it basically checks for a trend in residual variance. This won't work here because the variance of residues is more-or-less symmetric. 
+
+##### Durbin-Watson (dwtest): autocorrelation of residues
+
+```{r}
+for(n in names(models)){
+  print(n)
+  show(dwtest(models[[n]], alternative = "greater"))
+}
+```
+The autocorrelation is greater than 0. Check:
+```{r}
+cor(double_sqrt_lm$residuals[-1], double_sqrt_lm$residuals[-length(sqrt_lm$residuals)])
+```
+
+The residues increase. That's strange because the data doesn't seem to be ordered. Check if this autocorrelation is not an artifact:
+
+```{r}
+shuffle <- sample(1:724, 724, replace=F)
+cor(double_sqrt_lm$residuals[shuffle][-1], double_sqrt_lm$residuals[shuffle][-length(sqrt_lm$residuals)])
+```
+
+There is no autocorrelation in shuffled data, as it should be, so the apparent autocorrelation is not a bug. The data might be ordered somehow, but at first glance I don't see any ordering. 
+
+
+```{r} 
+qplot(1:724, double_sqrt_lm$residuals)
+```
+
+
+
+##### Breusch-Godfrey (bgtest): higher order autocorrelation
+
+```{r}
+for(n in names(models)){
+  print(n)
+  show(bgtest(models[[n]], order = 5))
+}
+```
+##### Harvey-Collier (harvtest): linearity
+
+```{r}
+for(n in names(models)){
+  print(n)
+  show(harvtest(models[[n]], order.by=~size, data=genomes))
+}
+```
+
+The relationship tured out to be linear for every transformation but not for un-transformed data, as should be expected. 
+
+##### Rainbow (raintest): linearity
+
+```{r}
+fract = 0.3
+centr = 0.8
+for(n in names(models)){
+  print(n)
+  show(raintest(models[[n]], fraction=fract, center=centr, order.by=~size, data=genomes))
+}
+```
+
+I don't think the rainbow test will do well in this case, because the data is basically "locally linear", and highly spread for medium genome sizes. This means that after restriction to a fraction of data either each model will fit better (after restriction to small or large genome sizes), or there will be no substantial change (after restriction to medium genome sizes)
+
+```{r}
+test.data <- data.frame('size'=genomes$size, 'GC'=genomes$GC)
+test.data <- test.data[as.integer(centr*724 - fract*724*0.5):(centr*724 + fract*724*0.5), ]
+test.data <- test.data[order(test.data$size), ]
+ggplot(data=genomes) + geom_point(aes(x=size, y=GC))
+ggplot(data=test.data) + geom_point(aes(x=size, y=GC))
+
+```
+
+
+#####  RESET (resettest): test for correct functional form (linearity)
+```{r}
+for(n in names(models)){
+  print(n)
+  show(resettest(models[[n]]))
+}
+```
+
+The first model is ill-specified, as should be expected. The others are ok. The results are in agreement with those of the Harvey-Collier test.
+
+##### Shapiro test: normality of residues
+```{r}
+for(n in names(models)){
+  print(n)
+  show(shapiro.test(rstandard(models[[n]])))
+}
+```
+
+```{r}
+for(n in names(models)){
+  print(n)
+  show(ks.test(rstandard(models[[n]]), pnorm))
+}
+```
+
+Both tests rejected the hypothesis that the residues are normally distributed. This may be caused by heteroskedasticity. 
+
+```{r}
+for(n in names(models)){
+  print(n)
+  show(qplot(rstandard(models[[n]])))
+}
+```
+
+### Homogeneity of the genomes
+
+```{r}
+h_lm <- lm(GC ~ sqrt(sqrt(size)) + group, data=genomes)
+summary(h_lm)
+```
+
+```{r}
+lrtest(h_lm, double_sqrt_lm)
+```
+
+The difference in groups is significant. 
+
+```{r}
+groups <- unique(genomes$group)
+gr_models <- list()
+for(g in 1:length(groups)){
+  d <- genomes[genomes$group == groups[[g]], ]
+  gr_models[[g]] <- lm(GC~log(size), data=d, x=T)
+}
+gr_fit <- sapply(1:length(groups), function(g) gr_models[[g]]$fit)
+gr_fit <- unlist(gr_fit)
+gr_fit <- gr_fit[order(as.numeric(names(gr_fit)))]
+gr_models_summary <- genomes[,c("size", "GC", "group")]
+gr_models_summary$fit <- gr_fit
+
+ggplot(data=gr_models_summary) + geom_point(aes(col=group, x=size, y=GC)) + geom_line(aes(x=size, y=fit, col=group))
+```
+
+
+The relationships are very different for different groups of organisms (sometimes even inverse), suggesting no universal biological connection between genome size and GC content.
+
+```{r}
+gr_nb = 13
+groups[[gr_nb]]
+gr_models[[gr_nb]]
+d <- genomes[genomes$group==groups[[gr_nb]], c("size", "GC")]
+d$fit <- gr_models[[gr_nb]]$fitted.values
+d$ID <- rownames(d)
+ggplot(data=d) + geom_text(aes(x=size, y=GC, label=ID)) + geom_line(aes(x=size, y=fit))
+plot(gr_models[[gr_nb]])
+```
