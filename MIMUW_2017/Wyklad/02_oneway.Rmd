@@ -80,7 +80,24 @@ shapiro.test(lm(CD14.2191~Mutation, data=AML)$residuals)
 ## Post-hoc tests
 
 ```{r, warning=FALSE, message=FALSE}
-pairwise.t.test(CD14.2191, Mutation, data=AML)
+pairwise.t.test(change.2191, Mutation, data=AML)
+
+model.va.3 = aov(change.2191~Mutation, data=AML)
+TukeyHSD(model.va.3)
+
+par(mar=c(5,6,4,2))
+plot(TukeyHSD(model.va.3), las=1)
+
+library(agricolae)
+model = aov(change.2191~Mutation, data=AML)
+HSD.test(model, "Mutation", console = TRUE)
+
+
+## Student-Newman-Keuls  differences
+SNK.test(model, "Mutation", console = TRUE)
+
+
+LSD.test(model, "Mutation", p.adj="bonferroni", console = TRUE)
 ```
 
 # Use Case 2: Dose response studies
