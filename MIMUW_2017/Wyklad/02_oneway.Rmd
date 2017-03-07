@@ -205,5 +205,6 @@ t(coefs)
 # Home work 
 
 Compare range distribution (or studentized range distribution) for SNK/HSD tests between two scenarios: 
+
 - all groups have equal size (so called balanced case),
 - some groups have unequal size (so called unbalanced case).
