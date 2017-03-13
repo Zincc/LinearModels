@@ -1,0 +1,61 @@
+---
+title: "Praca domowa 2"
+author: "Zofia Nawalany"
+date: "13 marca 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+##Generowanie trzech grup danych o równych i różnych licznościach: 
+```{r}
+
+generator<- function(n0, n1, n2){
+  y0 <- rnorm(n0)
+  y1 <- rnorm(n1)
+  y2 <- rnorm(n2)
+  x0 <- rep(1,n0)
+  x1 <- rep(2,n1)
+  x2 <- rep(3,n2)
+  wektor_y <- c(y0,y1,y2)
+  wektor_x <- c(x0,x1,x2)
+  zestawienie <- data.frame(wektor_y, wektor_x)
+  colnames(zestawienie) <- c("Wartosci_rozkladu","Numer_grupy")
+return(zestawienie)
+}
+
+d_z <- generator(30,30,30)
+model_zrownowazony <- aov(Wartosci_rozkladu~Numer_grupy, data=d_z)
+boxplot(Wartosci_rozkladu~Numer_grupy, data=d_z)
+
+d_n <- generator(20,50,150)
+model_niezrownowazony <- aov(Wartosci_rozkladu~Numer_grupy, data=d_n)
+boxplot(Wartosci_rozkladu~Numer_grupy, data=d_n)
+```
+
+#SNK i HSD testy
+
+```{r}
+library(agricolae)
+HSD.test(model_zrownowazony, "Numer_grupy", console=TRUE)
+#HSD.test(model_niezrownowazony, "Numer_grupy", console=TRUE) to nie jest test dla niezrównoważonych
+
+SNK.test(model_zrownowazony, "Numer_grupy", console=TRUE)
+SNK.test(model_niezrownowazony, "Numer_grupy", console=TRUE)
+
+```
+
+Jak wygląda rozkład dla 1000 powtórzeń
+```{r}
+make_pr <- function(n0,n1,n2){
+  d<- generator(n0,n1,n2)
+  pr <-anova(lm(Wartosci_rozkladu~Numer_grupy, data=d))[1,5]
+return(pr)
+}
+
+zrownowazone <- c(replicate(1000, make_pr(30,30,30)))
+niezrownowazone <- c(replicate(1000,make_pr(20,50,150)))
+hist(zrownowazone)
+hist(niezrownowazone)
+```
