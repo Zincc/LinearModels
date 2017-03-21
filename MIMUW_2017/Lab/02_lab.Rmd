@@ -1,0 +1,31 @@
+---
+title: "Analiza jednokierunkowa"
+author: "Przemyslaw Biecek"
+---
+
+# Intro
+
+Kolec dendrytyczny to wypustek na synapsie axon. Funkcja kolców nie jest w pełni znana, ale można ją łączyć z różnymi efektami jak np. funkcjami poznawczymi. 
+Więcej tutaj: https://en.wikipedia.org/wiki/Dendritic_spine
+
+W naszym zbiorze danych mamy cztery grupy myszy. Tzw. dzikie (WT) lub transgeniczne (TG). Niektóre otrzymują słodką wodę (+) inne pewne lekarstwo (+). 
+
+Sprawdźmy czy te cztery grupy różnią się, jeżeli chodzi o średnią długość kolców dendrytycznych.
+
+```{r}
+spines <- archivist::aread("pbiecek/ModeleLiniowe/repo/17df9d1fc4f43962a91b9ab14b7b8e6f")
+head(spines)
+```
+
+# Plan na spotkanie
+
+1. Wczytaj zbiór danych
+
+2. Narysuj rozkłady długości kolców w każdej z grup.
+
+3. Wykonaj jednokierunkową analizę wariancji i testy post hoc.
+
+4. Zbadaj różne kontrasty, czy wybór kontrastu ma wpływ na wyniki?
+
+
+
