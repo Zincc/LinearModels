@@ -1,0 +1,121 @@
+---
+title: "Praca domowa 4"
+author: "Aleksandra Dąbrowska"
+date: "22 March 2017"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+---
+
+#Zadanie
+Znajdź przykładowe dane na których można wykonać analizę dwukierunkową crossed i nested (mogą być to różne zbiory danych).
+
+
+#Dane
+Zajmuję się danymi `auta2012` z pakietu `PogromcyDanych`. Do modelowania wybieram tylko część danych, ponieważ działanie na wszytskich poziomach zmiennych może zająć bardzo dużo czasu.
+
+```{r,message=F,warning=F}
+library(dplyr)
+library(PogromcyDanych)
+library(lattice)
+
+```
+
+```{r dane}
+auta <- PogromcyDanych::auta2012 
+
+auta <- auta[,c(3,4,7,8,10,13,14,15,19)]
+auta$Rok.produkcji <- as.factor(auta$Rok.produkcji)
+
+auta2 <-  filter(auta, Marka %in% c("Kia","Volvo","Renault","Lexus"))
+
+auta2 <- auta2[which(auta2$Liczba.drzwi!=""),]
+auta2 <- auta2[which(auta2$Rodzaj.paliwa!=""),]
+auta2 <- auta2[which(auta2$Skrzynia.biegow!=""),]
+auta2 <- auta2[which(auta2$Kolor!=""),]
+auta2 <- auta2[which(auta2$Brutto.netto=="brutto"),]
+
+
+
+auta2 <- droplevels(auta2)
+
+head(auta2, 5)
+
+```
+
+#Analiza
+W przedstawionych poniżej modelach liniowych chcę objaśniać zmienną `Cena.W.PLN`.
+Na początku przedstawię średnie ceny samochodów według wybranych marek.
+
+```{r wykres}
+
+bwplot(Marka~Cena.w.PLN,data=auta2,xlim=c(0:300000))
+
+```
+
+Na wykresie przestawione zostały średnie ceny brutto poszczególnych marek samochodów. Interpretacja graficzna sugeruje różnice między cenami.
+
+#Crossed
+
+W powyższych danych możemy znaleźć zmienne jakościowe o przecinających się poziomach. Są to między innymi: `Rodzaj.paliwa`, `Skrzynia.biegow`, `Liczba.drzwi`,`Kolor`.
+
+```{r poziomy}
+levels(auta2$Rodzaj.paliwa)
+
+levels(auta2$Liczba.drzwi)
+
+levels(auta2$Skrzynia.biegow)
+```
+
+###Model 1
+Pierwszy model liniowy opieram o dwie przecinające się zmienne `Rodzaj.paliwa` i `Skrzynia.biegow`.
+
+```{r model przecinajace sie}
+interaction.plot(auta2$Rodzaj.paliwa,auta2$Skrzynia.biegow,auta2$Cena.w.PLN)
+
+model_crossed_1 <- aov(Cena.w.PLN~Rodzaj.paliwa*Skrzynia.biegow, data=auta2)
+
+summary(model_crossed_1)
+
+
+```
+
+Jak widać istnieje interakcja między zmiennymi `Skrzynia.biegow` i`Rodzaj.paliwa`.
+
+###Model 2 
+Następny model opieramo kolejną parę zmiennych przecinających się : `Liczba.drzwi` i `Skrzynia.biegow`.
+
+```{r model przecinajace sie 2}
+interaction.plot(auta2$Liczba.drzwi,auta2$Skrzynia.biegow,auta2$Cena.w.PLN)
+
+model_crossed_2 <- aov(Cena.w.PLN~Skrzynia.biegow*Liczba.drzwi, data=auta2)
+
+summary(model_crossed_2)
+
+```
+Jednak w tym przypadku widzimy, zarówno na wykresie `interaction.plot()` jak i używając funkcji `aov()`, że nie ma interakcji między zmiennymi.
+
+#Nested
+W zbiorze danych `auta2012` możemy wyróżnić zmienną `Model`, która jest zagnieżdzona w zmiennej `Marka`.
+
+##Model
+```{r}
+model_nested <- aov(Cena.w.PLN~Marka/Model, data=auta2)
+summary(model_nested)
+
+```
+
+Zagnieżdzona zmienna `Model` w istotnim stopniu objaśnia zmienną `Cena.w.PLN`. 
+
+#Model z wieloma czynnikami
+
+Na koniec, chcę zbudować model oparty na wielu czynnikach ze zbioru `auta2`, tak aby wyróżnić zmienne istotne.
+
+```{r}
+
+model_pelny <- aov(Cena.w.PLN~Marka/Model+Rodzaj.paliwa+Rok.produkcji+Skrzynia.biegow+Kolor+Liczba.drzwi,data=auta2)
+summary(model_pelny)
+```
+
+Dla tego zbioru danych wszystkie zmienne są istotne.
