@@ -1,0 +1,186 @@
+---
+title: "Praca domowa 3"
+author: "Aleksandra Dąbrowska"
+date: "16 March 2017"
+output: html_document
+---
+#Problem
+Rozważamy problem analizy jednokierunkowej dla dwóch zmiennych jakościowych.
+Chcemy sprawdzić czy to, że rozważamy grupy równo i różnoliczne ma wpływ na kontrolę błędów 1-rodzaju.
+
+#Generowanie danych
+Najpierw generujemy dane dla równolicznych grup (po 30 obserwacji)
+```{r generowanie danych}
+
+grupy_rowne_bez_interakcji <- function(){
+  y11 <- rnorm(30, mean=10)
+  y12 <- rnorm(30,mean=20)
+  y13 <- rnorm(30,mean=0)
+  y21 <- rnorm(30, mean=15)
+  y22 <- rnorm(30,mean=25)
+  y23 <- rnorm(30,mean=5)
+  y <- c(y11,y12,y13,y21,y22,y23)
+  
+  A <- rep(c(1,2,3,1,2,3),each=30)
+  B <- rep(1:2,each=90)
+  
+  dane <- data.frame(y,A,B)
+  dane$A <-factor(dane$A)
+  dane$B <- factor(dane$B)
+  return(dane)
+}
+
+
+grupy_rowne_z_interakcja <- function(){
+  y11 <- rnorm(30, mean=10)
+  y12 <- rnorm(30,mean=0)
+  y21 <- rnorm(30, mean=20)
+  y22 <- rnorm(30,mean=30)
+  y <- c(y11,y12,y21,y22)
+  
+  A <- rep(c(1,2,1,2),each=30)
+  B <- rep(1:2,each=60)
+  
+  dane <- data.frame(y,A,B)
+  dane$A <-factor(dane$A)
+  dane$B <- factor(dane$B)
+  return(dane)
+}
+```
+
+Zmieniamy liczebności w dwóch grupach. 
+
+```{r}
+grupy_nierowne_bez_interakcji <- function(){
+  y11 <- rnorm(30, mean=10)
+  y12 <- rnorm(30,mean=20)
+  y13 <- rnorm(10,mean=0)
+  y21 <- rnorm(30, mean=15)
+  y22 <- rnorm(30,mean=25)
+  y23 <- rnorm(50,mean=5)
+  y <- c(y11,y12,y13,y21,y22,y23)
+  
+  a11 <- rep(1,times=30)
+  a12 <- rep(2,times=30)
+  a13 <- rep(3, times=10)
+  a23 <- rep(3,times=50)
+  
+  A<-c(a11,a12,a13,a11,a12,a23)
+  
+  b1 <- rep(1,times=70)
+  b2 <- rep(2,times=110)
+  B <- c(b1,b2)
+  
+  dane <- data.frame(y,A,B)
+  dane$A <-factor(dane$A)
+  dane$B <- factor(dane$B)
+  return(dane)
+  
+}
+
+grupy_nierowne_z_interakcja <- function(){
+  y11 <- rnorm(30, mean=10)
+  y12 <- rnorm(10,mean=0)
+  y21 <- rnorm(30, mean=20)
+  y22 <- rnorm(50,mean=30)
+  y <- c(y11,y12,y21,y22)
+  
+  
+  a11 <- rep(1,times=30)
+  a12 <- rep(2,times=10)
+  a22 <- rep(2,times=50)
+  
+  A <- c(a11,a12,a11,a22)
+  b1 <- rep(1, times=40)
+  b2 <- rep(2, times=80)
+  
+  B <- c(b1,b2)
+  
+  dane <- cbind(y,A,B)
+  dane <- as.data.frame(dane)
+  dane$A <-factor(dane$A)
+  dane$B <- factor(dane$B)
+  
+  return(dane)
+}
+  
+
+```
+
+#Wizualizacje danych
+
+Każdy zestaw danych przedstawiam na wykresie interakcji dla obu zmiennych jakościowych.
+
+```{r wizualizacje}
+
+#interaction plot
+
+dane_1 <- grupy_rowne_bez_interakcji()
+interaction.plot(dane_1$A,dane_1$B,dane_1$y)
+
+dane_2 <- grupy_rowne_z_interakcja()
+interaction.plot(dane_2$A,dane_2$B,dane_2$y)
+
+dane_3<- grupy_nierowne_bez_interakcji()
+interaction.plot(dane_3$A,dane_3$B,dane_3$y)
+
+dane_4 <- grupy_nierowne_z_interakcja()
+interaction.plot(dane_4$A,dane_4$B,dane_4$y)
+```
+
+Tworzę także funkcję która zwraca nam p-wartość dla modelu liniowego w którym sprawdzamy interakcję między grupami A i B.
+
+```{r obliczanie p-value}
+p_wartosc<- function(dane){
+  model <- aov(y~A*B,data=dane)
+  pods <- summary(model)
+  p.val <-pods[[1]]['Pr(>F)']
+  return(p.val[3,1])
+}
+
+```
+
+#Symulacje
+
+Poniżej powtarzamy generowanie danych 1000 razy i dostajemy p-wartości dla wszystkich zestawów danych.
+
+Na początku dla danych z grup równolicznych
+```{r symulacje}
+m<-1000
+p_value_rowne_bez_interakcji<-replicate(m,{
+  x<-grupy_rowne_bez_interakcji()
+  p_wartosc(x)
+})
+
+#jak czesto odrzucamy hipoteze zerowa, mowiaca o braku interakcji miedzy grupami
+
+mean(p_value_rowne_bez_interakcji<0.05)
+
+p_value_rowne_z_interakcja <- replicate(m,{
+  x<-grupy_rowne_z_interakcja()
+  p_wartosc(x)
+})
+
+mean(p_value_rowne_z_interakcja<0.05)
+
+```
+
+
+Zmieniamy liczebność grup.
+```{r} 
+p_value_nierowne_bez_interakcji <- replicate(m,{
+  x<-grupy_nierowne_bez_interakcji()
+  p_wartosc(x)
+})
+
+mean(p_value_nierowne_bez_interakcji<0.05)
+
+p_value_nierowne_z_interakcja <- replicate(m,{
+  x<-grupy_nierowne_z_interakcja()
+  p_wartosc(x)
+})
+
+
+mean(p_value_nierowne_z_interakcja<0.05)
+```
+Powyższe symulacje pokazują, że zmiana liczebności grup nie ma wpływu na naszą decyzję w kwestii testowania hipotezy o braku interakcji między zmiennymi.
