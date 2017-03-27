@@ -1,0 +1,86 @@
+---
+title: "Dwukierunkowa ANOVA"
+author: "Przemyslaw Biecek"
+date: "Modele liniowe i mieszane"
+output: 
+  html_document:
+    toc: TRUE
+---
+
+
+# Kontrasty
+
+Zmienne jakościowe trzeba jakoś zakodować w macierzy `X`. To kodowanie można określić podając odpowiednie kontrasty.
+
+```{r, warning=FALSE, message=FALSE}
+library(PBImisc)
+library(MASS)
+
+t(contr.treatment(5))
+
+t(contr.helmert(5))
+
+t(contr.poly(5))
+
+t(contr.sdif(5))
+
+model.matrix(response~dose, vaccination)[1:5,]
+
+model.matrix(response~dose, vaccination,
+ contrasts=list(dose=contr.helmert))[1:5,]
+
+model.matrix(response~dose, vaccination,
+ contrasts=list(dose=contr.poly))[1:5,]
+```
+
+## Kontrasty w zastosowaniach
+
+```{r, warning=FALSE, message=FALSE}
+summary(lm(response~dose, data = vaccination))
+
+kontr = contr.sdif(5)
+summary(lm(response ~ dose, data = vaccination, contrasts=list(dose=kontr)))
+
+model.va.7 <- lm(response~ordered(dose), data=vaccination)
+summary(model.va.7)
+```
+
+## Porównaj wszystkie kontrasty
+
+```{r, warning=FALSE, message=FALSE}
+options()$contrasts
+
+contrs <- apropos("contr\\.")
+coefs <- sapply(contrs, function(i)
+ lm(response~dose, data = vaccination,
+ contrasts=list(dose=get(i)))$coefficients
+)
+t(coefs)
+```
+
+# Dwukierunkowa analiza wariancji
+
+Przykład dla danych o Schizofrenii
+
+```{r}
+library(PBImisc)
+head(schizophrenia)
+```
+
+## Wykresy interakcji
+
+```{r}
+attach(schizophrenia)
+interaction.plot(CD28, NfkB, Dikeos.sum)
+interaction.plot(NfkB, CD28, Dikeos.sum)
+```
+
+## Analiza wariancji
+
+```{r}
+modelNCbezI = lm(Dikeos.sum~NfkB+CD28, data = schizophrenia)
+modelNCzI = lm(Dikeos.sum~NfkB*CD28, data = schizophrenia)
+anova(modelNCbezI, modelNCzI)
+```
+
+
