@@ -57,11 +57,11 @@ Każdy etap przed oceną musi był zgłoszony na GitHub.
 * etap 5 - 50pkt - Rozważenie i weryfikacja występowania i istotności interakcji pomiędzy kluczowymi elementami modelu
 * etap 6 - 60pkt - Weryfikacja potrzeby i poprawny wybór transformacji/kodowania dla zmiennych zależnych i niezależnych
 * etap 7 - 70pkt - Model mieszany na cechach zadania i ucznia z poprawnie wskazanymi efektami losowymi/stałymi
-* etap 8 - 80pkt - Uwzglednienie wag w procesie budowy i walidacji modelu
-* etap 9 - 90pkt - Uwzględnienei zarówno zadań z matematyki jak i z języka polskiego (weryfikacja interakcji)
+* etap 8 - 80pkt - Uwzględnienie wag w procesie budowy i walidacji modelu
+* etap 9 - 90pkt - Uwzględnienie zarówno zadań z matematyki jak i z języka polskiego (weryfikacja interakcji)
 * etap 10 - 100pkt - Przygotowanie krótkiego reprodukowalnego raportu podsumowującego najistotniejsze wyniki modelu (w jezyku angielskim, do 4 stron)
 
-Dane o zadaniach (dane o oczniach należy odczytać niezależnie, patrz niżej):
+Dane o zadaniach (dane o uczniach należy odczytać niezależnie, patrz niżej):
 
 * Tylko dane o zadaniach z matematyki https://www.dropbox.com/s/lm4ew2ccrpawk58/actionTimeScoreMath.rda
 * Dane o zadaniach z matematyki i czytania https://www.dropbox.com/s/soyynah0lylu1gd/actionTimeScore.rda
