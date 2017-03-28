@@ -47,6 +47,7 @@ anova(modelC)
 anova(modelC, model0)
 anova(modelCT)
 anova(modelCT, model0)
+anova(modelCTi)
 anova(modelCTi, modelCT)
 anova(modelCTi, modelC)
 summary(modelCTi)
@@ -88,6 +89,11 @@ head(apartments[,c(1,2,5,6,7,10,14)])
 anova(lm(m2.price ~ factor(year)+factor(month), data=apartments))
 anova(lm(m2.price ~ factor(year)/factor(month), data=apartments))
 anova(lm(m2.price ~ factor(year)*factor(month), data=apartments))
+
+anova(lm(m2.price ~ factor(district)+factor(street), data=apartments))
+anova(lm(m2.price ~ factor(district)/factor(street), data=apartments))
+anova(lm(m2.price ~ factor(district)*factor(street), data=apartments))
+
 ```
 
 
@@ -107,6 +113,8 @@ summary(endometriosis)
 
 library(lattice)
 xyplot(log(alpha.factor)~log(beta.factor)|disease*phase, data= endometriosis, type=c("p","r"))
+
+xyplot(log(alpha.factor)~log(beta.factor)|phase, data= endometriosis, type=c("p","r"))
 
 library(nlme)
 CF = factor(paste(endometriosis$disease,endometriosis$phase))
