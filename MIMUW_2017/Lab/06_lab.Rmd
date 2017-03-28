@@ -1,0 +1,15 @@
+---
+title: "Wybór modelu"
+author: "Przemyslaw Biecek"
+---
+
+# Plan na spotkanie
+
+1. Podzielmy się na 3 grupy
+2. Każda grupa przez pierwsze 20-30 min przygotowuje zbiór danych, następnie wymienia się zbiorami danych i na dwóch otrzymanych zbiorach danych próbuje znaleźć najlepszy model.
+3. Reguły tworzenia zbioru danych: do 20 zmiennych. Każda zmienna ma rozkład `B(1, 0.5)` lub `U[0, 1]`. Zmienne mogą być skorelowane (czy wiesz jak generować skorelowane zmienne?). y1 wygeneruj jako kombinacja liniowa wylosowanych zmiennych z wagami/współczynnikami nieujemnymi, sumującymi się do 10. y wygeneruj jako y1 z dodatkowym szumem gausowskim, o odchyleniu standardowym równym odchyleniu standardowemu y1.
+4. Na dwóch otrzymanych zbiorach danych zbuduj ,,najlepszy’’ model. 
+5. Sprawdź na ile Twój model jest bliski modelowi ,,prawdziwemu''.
+
+Staraj się wykorzystać to, że pracujesz w grupie. Zanim zaczniesz kodować rozwiązanie, wymień się z osobami w grupie pomysłami jak to rozwiązanie mogłoby wyglądać, jakie funkcje/biblioteki można wykorzystać/jakie kryteria użyć.
+
