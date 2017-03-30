@@ -13,3 +13,5 @@ author: "Przemyslaw Biecek"
 
 Staraj się wykorzystać to, że pracujesz w grupie. Zanim zaczniesz kodować rozwiązanie, wymień się z osobami w grupie pomysłami jak to rozwiązanie mogłoby wyglądać, jakie funkcje/biblioteki można wykorzystać/jakie kryteria użyć.
 
+Rozwiązania umieść tutaj
+https://docs.google.com/spreadsheets/d/1eY0E8lWkt4MPmKFf1eqe4RW1OCeaNySdUAcgOmAarAo/edit?usp=sharing
