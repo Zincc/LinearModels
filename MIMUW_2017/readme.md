@@ -22,7 +22,7 @@ Planowana tematyka spotkań (może ulec drobnym zmianom w trakcie semestru)
 
 * 2017-03-21 - Model hierarchiczny [notatki](https://rawgit.com/pbiecek/LinearModels/master/MIMUW_2017/Wyklad/05_hierarchia.html), [Lab](https://rawgit.com/pbiecek/LinearModels/master/MIMUW_2017/Lab/05_lab.html)
 * 2017-03-28 - Wybór modelu [brudnopis](https://rawgit.com/pbiecek/LinearModels/master/MIMUW_2017/Wyklad/06_wybor_modelu.html), [Lab](https://github.com/pbiecek/LinearModels/blob/master/MIMUW_2017/Lab/06_lab.Rmd)
-* 2017-04-04 - Prezentacja projektu
+* 2017-04-04 - Prezentacja projektu, [Lab](https://github.com/pbiecek/LinearModels/blob/master/MIMUW_2017/Lab/07lab.Rmd)
 
 * 2017-04-11 - Jeden składnik losowy
 * 2017-04-25 - Dwa składniki losowe (zagnieżdzone/hierarchincze)
