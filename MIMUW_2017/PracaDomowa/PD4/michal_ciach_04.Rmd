@@ -1,0 +1,154 @@
+---
+title: 'Analysis of yeast protein lengths'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Goal of study: Investigate if different families of yeast (Saccharomycetaceae, Debaryomycetaceae) differ in protein lengths. 
+Check differences between enzymatic and non-enzymatic proteins. 
+
+```{r}
+library(stringr)
+library(lmtest)
+library(ggplot2)
+library(readr)
+```
+
+
+### Data preparation
+```{r}
+taxonomy <- data.frame("Species" = c("Candida albicans",
+                                          "Meyerozyma guilliermondii",
+                                          "Debaryomyces hansenii",
+                                          "Candida dubliniensis",
+                                          "Babjeviella inositovora",
+                                          "Saccharomyces cerevisiae",
+                                          "Ashbya gossypii",
+                                          "Naumovozyma castellii",
+                                          "Kluyveromyces lactis",
+                                          "Zygosaccharomyces rouxii"),
+                       "Family" = c(rep("Debaryomycetaceae", 5), rep("Saccharomycetaceae", 5)))
+
+protein.files <- list.files("Dane")
+protein.data <- read_delim(str_c("Dane/", protein.files[1]), "\t", escape_double = FALSE, trim_ws = TRUE)
+
+for(prot.file in protein.files[-1]){
+  protein.data <- suppressMessages(rbind(protein.data, read_delim(str_c("Dane/", prot.file), "\t", escape_double = FALSE, trim_ws = TRUE)))
+}
+
+protein.data$Organism <- sapply(protein.data$Organism, function(org) str_c(str_split(org, fixed(" "))[[1]][1:2], collapse=" ")) 
+# check for proper name parsing:
+# unique(protein.data$Organism) %in% taxonomy$Species
+
+protein.data$Organism_family <- sapply(protein.data$Organism, function(org) as.character(taxonomy[which(taxonomy$Species==org), 2]))
+# check for proper parsing 
+# unique(protein.data$Organism_family)
+
+protein.data$Log.length <- log(protein.data$Length)
+# Normalized lengths for testing purposes
+protein.data$Normalized.log <- unlist(tapply(protein.data$Log.length, protein.data$Organism, function(x) x-mean(x)))
+protein.data$Normalized.log <- unlist(tapply(protein.data$Normalized.log, protein.data$Organism, function(x) x/sd(x)))
+
+protein.data$Protein.type <- ifelse(is.na(protein.data$`EC number`), "Non-enzymatic", "Enzymatic")
+names(protein.data)
+protein.data[1, ]
+```
+
+### Data visualisation
+```{r}
+suppressMessages(tapply(protein.data$Normalized.log, protein.data$Organism, ks.test, pnorm))
+
+ggplot(data=protein.data) + geom_histogram(aes(x=Log.length), binwidth=0.1) + facet_grid(Organism_family~Organism) + ggtitle("Log lengths")
+ggplot(data=protein.data) + geom_histogram(aes(x=Normalized.log), binwidth=0.1) + facet_grid(Organism_family~Organism) + ggtitle("Standardized log lengths")
+```
+
+The normalized log-lengths are fairly normal. 
+
+### Contingency tables
+Species vs family table
+
+```{r}
+table(protein.data$Organism, protein.data$Organism_family)
+```
+
+The nested structure is clearly visible. However, since the species names are unique in families, crossed analysis is the same as nested analysis. 
+
+Species vs protein type table
+```{r}
+table(protein.data$Organism, protein.data$Protein.type)
+```
+
+The structure is clearly crossed, because proteins of each type are found in all species. However, the groups are highly unbalanced.
+
+### ANOVA analysis
+
+##### Nested analysis of differences among organisms: 
+
+```{r}
+taxonomic.model <- lm(Log.length ~ Organism_family + Organism:Organism_family, data=protein.data)
+taxonomic.anova <- anova(taxonomic.model)
+taxonomic.anova
+```
+
+There are no significant differences between the families, but significant differences between the organisms within the families.
+
+```{r}
+taxonomic.model$coefficients
+```
+
+On average, proteins of the Saccharomycetaceae family turned out to be `exp(0.003973946) = 1.004` times longer than proteins of Debaryomycetaceae (as the effects of coefficients are multiplicative after taking an exponent); This difference is not significant.
+
+```{r}
+coeftest(taxonomic.model)
+```
+
+There are three species with p-value lower than `10^-4`: Babjeviella inositovora, Candida dubliniensis and Saccharomyces cerevisiae (Debaryomyces hansenii has a higher p-value and low estimate, so it's less interesting). The species with the biggest magnitude of estimate are Babjeviella inositovora and Saccharimyces cerevisiae.
+
+The mean length of Saccharomycetaceae proteins is `exp(5.957049926+0.003973946) = 388.0072`; Saccharomyces cerevisiae species have proteins shorter by a factor of `exp(-0.178887433) = 0.8362`, giving average length of `exp(5.957049926+0.003973946-0.178887433)=324.4516`, i.e. over 60 aminoacids shorter than the mean for Saccharomecetacea. This suggests presence of an evolutionary pressure on this organism to shorten its proteins. 
+
+The average length of proteins of Babjeviella inositovora is `exp(5.9570499-0.1802627)=322.7207`.
+
+##### Crossed analysis of differences among protein types:
+
+```{r}
+enzyme.model <- lm(Log.length ~ Organism*Protein.type, data=protein.data)
+enzyme.anova <- anova(enzyme.model)
+enzyme.anova
+```
+
+There are significant differences between the protein types, and an interaction with organism species. 
+
+```{r}
+enzyme.model$coefficients
+```
+
+
+```{r} 
+scer.enz.mean <- exp(6.1294388699 + 0.0714431757)
+scer.nonenz.mean <- exp(6.1294388699 + 0.0714431757 - 0.3762134692 -0.1901910773)
+real.scer.enz.mean <- mean(protein.data[protein.data$Organism=="Saccharomyces cerevisiae" & protein.data$Protein.type=="Enzymatic", ]$Length)
+real.scer.nonenz.mean <- mean(protein.data[protein.data$Organism=="Saccharomyces cerevisiae" & protein.data$Protein.type=="Non-enzymatic", ]$Length)
+```
+
+The predicted mean protein length for Saccharomyces cerevisiae non-enzymatic proteins is `r scer.nonenz.mean`, and for S. cerevisiae enzymatic proteins is `r scer.enz.mean`. The exponent of interaction coefficient is equal to `exp(-0.3762134692)=0.6865`, which means that on average, a non-enzymatic protein from S.cerevisiae will be about 0.7 times shorter that it would be expected if the effects were strictily additive. This means that the evolutionary pressure on this yeast to shorten its non-enzymatic proteins is stronger that the pressure to shorten the enzymatic proteins, and/or that the pressure to shorten non-enzymatic proteins is stronger in this organism compared to other species.
+
+The obtained estimates deviate highly from the ones computed by hand: `r real.scer.nonenz.mean` for non-enzymatic and `r real.scer.enz.mean ` for enzymatic S. cerevisiae proteins. I don't understand this effect. Is this a result of stabilization of variance in a hierarchical model?
+
+
+##### Full model
+
+```{r}
+full.model <- lm(Log.length ~ Organism_family + Protein.type + Organism + Organism:Protein.type + Organism:Organism_family, data=protein.data)
+full.anova <- anova(full.model)
+full.anova
+```
+
+```{r}
+full.model$coefficients
+```
+
+
+
