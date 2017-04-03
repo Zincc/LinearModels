@@ -1,0 +1,90 @@
+---
+title: "Piotr Bajger - Etap 1."
+author: "Piotr Bajger"
+date: "3 kwietnia 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(MASS)
+```
+
+## 1.1. Wczytanie i przygotowanie danych
+
+Celem Etapu 1. jest przygotowanie danych oraz skonstruowanie modelu predykcji czasu potrzebnego na rozwiązanie zadania z części matematycznej testu PISA 2015 na podstawie ID zadania oraz jego pozycji w kwestionariuszu.
+
+Dane pochodzą z pliku **actionTimeScoreMath.rda**. Będziemy korzystać jedynie ze zmiennych _T_, _CNTSTUID_, _position_ oraz _item_short_. Rozpoczniemy od wczytania zbioru danych oraz usunięcia wybrakowanych obserwacji, tzn. takich, dla których:
+
+* zmienna _T_, _CNTSTUID_, _position_ lub _item_short_ przyjmuje wartość _NA_.
+
+* zmienna _position_ przyjmuje wartość _-1_.
+
+```{r echo=FALSE}
+data = load("C:/Projects/R/actionTimeScoreMath.rda")
+qTime <- actionTimeScoreMath[,c("CNTSTUID", "item_short", "T", "position")]
+rm(actionTimeScoreMath)
+qTime <- na.omit(qTime)
+qTime <- qTime[!qTime$position==-1,]
+```
+
+Następnie wyodrębniamy z _item_short_ ID zadania (pierwsze cztery znaki) i zapisujemy jako nową zmienną _question_.
+
+```{r echo=FALSE}
+qTime$question = as.character(lapply(qTime$item_short, function(x) substr(x, 0, 4)))
+```
+
+Przeprowadzamy agregację, tzn. dla każdej pary (_CNTSTUID_, _question_) sumujemy czas _T_, by znaleźć całkowity czas, który uczeń poświęcił‚ na rozwiązanie zadania. Dołączamy do zagregowanych w ten sposób danych zmienną _position_. Usuwamy zmienne, które nie są przedmiotem naszej analizy i otrzymujemy w ten sposób zbiór **qTimeFinal**.
+
+```{r echo=FALSE}
+qTimeAgg <- aggregate(qTime$T, list(CNTSTUID = qTime$CNTSTUID, question = qTime$question), FUN=sum)
+colnames(qTimeAgg)[3] <- "T"
+qTime <- qTime[,c("CNTSTUID", "question", "position")]
+qTime <- qTime[!duplicated(qTime),]
+qTimeFinal <- merge(qTimeAgg, qTime) #dodaje position do qTimeAgg
+qTimeFinal <- qTimeFinal[,c("T", "question", "position")]
+qTimeFinal <- droplevels(qTimeFinal)
+```
+
+Badamy rozkład zmiennej _T_:
+```{r echo=FALSE}
+brks = 5000*(0:100)
+qTimeFinal$T.cut = cut(qTimeFinal$T, breaks=brks)
+```
+```{r}
+barplot(with(qTimeFinal, table(T.cut)), col="white")
+```
+
+Rozkład sugeruje transformację _T_ -> _log(T)_. Widzimy, że przetransformowany czas ma istotnie rozkład zbliżony do normalnego (najlepsze dopasowanie zaznaczone na czerwono).
+```{r}
+qTimeFinal$logT = log(qTimeFinal$T)
+fit <- fitdistr(qTimeFinal$logT, "normal")
+h = hist(qTimeFinal$logT, prob = TRUE, xlab="log(T)", main="Distribution of log(T)")
+curve(dnorm(x, fit$estimate[1], fit$estimate[2]), col=2, add=TRUE)
+```
+
+```{r echo=FALSE}
+#Clean-up
+rm(qTimeAgg)
+rm(qTime)
+gc()
+```
+## 1.2. Konstrukcja modeli liniowych
+
+Mając w ten sposób przygotowane dane możemy przejść do konstrukcji właściwego modelu. Będziemy przewidywali (zlogarytmizowany) czas (_logT_) potrzebny na rozwiązanie zadadnia na podstawie ID zadania (_question_) oraz jego pozycji w teście (_position_). Rozważamy następujące modele liniowe uzależniające zlogarytmizowany czas od:
+
+* model1: Pozycji w teście oraz ID zadania.
+
+* model2: ID zadania zagnieżdżonego w pozycji w teście.
+
+```{r}
+model1 <- lm(logT~as.factor(position)+question, data=qTimeFinal)
+model2 <- lm(logT~as.factor(position)/question, data=qTimeFinal)
+```
+
+Testy ANOVA sugerują, że w obu przypadkach występują statystycznie istotne różnice pomiędzy średnimi w podpopulacjach, toteż uzasadnione jest użycie obu zmiennych. W Etapie 2. będziemy kontynuować analizę powyższych modeli.
+
+```{r}
+anova(model1)
+anova(model2)
+```
