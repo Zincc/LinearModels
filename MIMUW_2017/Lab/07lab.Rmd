@@ -5,6 +5,8 @@ author: "Przemyslaw Biecek"
 
 # Plan na spotkanie
 
+Pobierz plik `df.rda` i wykonaj na nim poniższe zadania https://github.com/pbiecek/LinearModels/blob/master/MIMUW_2017/Lab/df.rda
+
 1. Wykonaj analizę jednokierunkową wariancji ze zmienną `V1`. Ustaw poziom `B` jako poziom referencyjny.
 2. Połącz w zmiennych `V1` i `V2` poziomy `B` i `C` ze sobą, a następnie wykonaj test weryfikujący istotność interakcji.
 3. Dla zmiennej `V1` porównaj wyniki dla różnych kontrastów, przynajmniej Helmerta, poly i sum.
