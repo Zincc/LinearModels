@@ -1,0 +1,226 @@
+---
+title: "Projekt 1-2"
+author: "Anna Wójcik, Grzegorz Ziajka, Dawid D¹bkowski"
+date: "24 marca 2017"
+output: html_document
+---
+
+Biblioteki i skrypty:
+
+```{r, warning=FALSE, message=FALSE}
+library("ggplot2")
+library("tidyr")
+library("dplyr")
+library("foreign")
+library("MASS")
+library("lmtest")
+```
+
+<!---
+# CNT - nazwa kraju ucznia
+# CNTSCHID - numer szkoly ucznia
+# CNTSTUID - numer ucznia
+# BOOKID - informacja jaki zestaw zadan otrzymal (zestawy zadan przydzielane sa losowo)
+# item_short - nazwa zadania (przed literk¹ Q) i podpunktu (po literce Q)
+# subject - kod przedmiotu (matematyka, czytanie, przyroda)
+# A - liczba akcji wykonanych przy rozwiazywaniu zadania
+# S - wynik zadania (czy rozwiazal czy nie)
+# T - czas rozwiazywania zadania w ms
+# position - informacja w ktorej czesci testu to zadanie sie pojawilo (1 - pierwsze 30 min, 2 - kolejne 30 min itp)
+
+#load("actionTimeScore.rda")      # dane o zadaniach z matematyki i czytania
+load("actionTimeScoreMath.rda")   # dane o zadaniach z matematyki
+load("actionTimeScoreGender.rda") # dane o zadaniach z matematyki plus plec
+# dane o uczniach:
+#stud2015 <- read.spss("Cy6_ms_cmb_stu_qqq.sav", use.value.labels = TRUE, to.data.frame = TRUE)
+--->
+
+### Punkt 1 i 2 projektu
+
+Zbadamy co wyp³ywa na czas rozwi¹zywania zadañ przez uczniów (T). Analizie poddamy objaœniaj¹ce zmienne jakoœciowe:
+- M (numer zadania)
+- Q (numer podpunktu)
+- position (kolejnoœæ wystêpowania w teœcie, od 1 do 4)
+W celu objaœnienia zmiennej iloœciowej:
+- T (czas rozwi¹zywania podpunktu w sekundach)
+
+W kolejnych punktach przygotujemy dane do analizy, stworzymy modele jedno- oraz dwuwymiarowe (tak¿e z zagnie¿d¿anniem i typu crossed). Wykonamy analizy warancji jedno- i dwukierunkowe i wyprowadzimy wnioski z uzyskanych modeli.
+
+## Przygotowanie danych
+
+Przygotujemy dane do analizy. Usuniemy wszystkie rekordy, w których interesuj¹ce nas zmienne s¹ NA (lub -1).
+
+```{r, cache=TRUE}
+load("actionTimeScoreGender.rda") # dane o zadaniach z matematyki plus plec
+dane <- actionTimeScoreGender
+rm(actionTimeScoreGender)
+
+dane <- separate(dane, item_short, into = c('M', 'Q'), sep = 4)
+#dane$MQ <- paste(dane$M, dane$Q)
+dane$M <- as.factor(dane$M)
+dane$Q <- as.factor(dane$Q)
+dane$position <- replace(dane$position, dane$position==-1, NA)
+dane <- dane[complete.cases(dane),]
+
+indeksy <- quantile(dane$T, probs=c(0.01, 0.99))
+dane <- filter(dane, T<=indeksy[2])
+dane <- filter(dane, T>=indeksy[1])
+rm(indeksy)
+dane <- droplevels(dane) # usuwamy brakuj¹ce poziomy factor-ów
+
+summary(dane) # podsumowanie
+```
+
+## Analiza jednokierunkowa
+
+### Histogram zmiennej objaœnianej - czas rozwi¹zywania podpunktu (T)
+
+```{r, catche=TRUE, message=FALSE}
+ggplot(dane, aes(T)) + geom_histogram()
+```
+
+Zmienna objaœniana ma bardzo du¿¹ rozpiêtoœæ czasów pomimo tego, ¿e wiêkszoœæ czasów mieœci siê w przedziale 0.5 do 2 minut (nawet po usuniêciu lewego i prawego ogona). W przysz³oœci bêdziemy d¹¿yæ do tego, by wprowadziæ odpowiedni¹ transformacjê z rodziny boxa-coxa. Na razie stosowaæ bêdziemy transformacjê pierwiastkow¹, która zmniejszy problem du¿ej rozpiêtoœci czasów i normalnoœci reszt.
+
+```{r, catche=TRUE, message=FALSE}
+ggplot(dane, aes(sqrt(T))) + geom_histogram()
+```
+
+### Model 1 - zale¿noœæ miêdzy czasem (T) a id zadania (M)
+
+```{r, cache=TRUE}
+invisible(gc())
+a1 <- aov(sqrt(T)~M, data=dane)
+summary(a1)
+ggplot(dane, aes(M, sqrt(T))) + geom_boxplot() + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+Widzimy, ¿e ró¿ne zadania maj¹ istotnie ró¿ne œrednie. Mo¿e to wynikaæ z tego, ¿e ró¿ne zadania maj¹ ró¿n¹ trudnoœæ, z³o¿onoœæ i tematykê, przez co czas rozwi¹zywania podpunktów jest istotnie ró¿ny. Warto zwróciæ uwagê, ¿e zadania o wielu podpunktach bêd¹ tutaj silniej wp³ywa³y na model. Porównamy jeszcze parami, które zadania siê ró¿ni¹, za pomoc¹ testu HSD Tukeya.
+
+```{r, cache=TRUE}
+invisible(gc())
+t1 <- TukeyHSD(a1)
+plot(t1, las=1, yaxt='n', ann=FALSE)
+rm(a1)
+rm(t1)
+```
+
+Jak widaæ z wykresu, przedzia³y ufnoœci dla bardzo wielu par zadañ nie zawieraj¹ 0. Wnioskujemy, ¿e miêdzy czasami rozwi¹zywania podpunktu s¹ bardzo du¿e ró¿nice.
+
+### Model 2 - zale¿noœæ miêdzy czasem (T) a pozycj¹ w kwestionariuszu (position)
+
+```{r, cache=TRUE}
+invisible(gc())
+a2 <- aov(sqrt(T)~position, data=dane)
+summary(a2)
+ggplot(dane, aes(position, sqrt(T))) + geom_boxplot()
+```
+
+Ró¿nice miêdzy œrednimi czasami s¹ istotne. Na wykresie mo¿na zauwa¿yæ, ¿e im wczeœniej podpunkt zadania by³ usytuowany w teœcie, tym wiêcej zajmowa³ czasu. Mo¿e to wynikaæ z tego, ¿e uczniowie mieli niedostatecznie du¿o czasu i pod koniec dzia³ali ju¿ pod jego presj¹. Oczywiœcie mog¹ tu wchodziæ te¿ inne czynniki np. to, ¿e w czasie rozwi¹zywania uczniowie nabierali wprawy. Zobaczmy jeszcze, które numery pozycji ró¿ni¹ siê istotnie.
+
+```{r, catche=TRUE}
+invisible(gc())
+t2 <- TukeyHSD(a2)
+t2
+plot(t2)
+rm(a2)
+rm(t2)
+```
+
+Jak widzimy, przedzia³y ufnoœci dla wszystkich par s¹ roz³¹czne z zerem, wiêc przypuszczamy, ¿e ka¿de kolejne 30 minut testu istotnie wp³ywa³o na prêdkoœæ rozwi¹zywania.
+
+## Analiza wielokierunkowa
+
+Dla analizy wielokierunkowej pos³u¿ê siê zmniejszon¹ ramk¹ danych, bêd¹c¹ losow¹ próbk¹ z oryginalnej. Jest to nadal bardzo du¿y zbiór, podobnego rzêdu wielkoœci, lecz na tyle ma³y, aby móc na nim pracowaæ.
+
+```{r, cache=TRUE}
+invisible(gc())
+dane2 <- dane[sample(nrow(dane),1000000),]
+rm(dane)
+```
+
+### Model 3 - zale¿noœc miêdzy czasem (M) a id podpunktu (Q) zagnie¿d¿onym w id zadania (M)
+
+```{r, cache=TRUE}
+invisible(gc())
+a3 <- aov(sqrt(T)~M/Q, data=dane2)
+summary(a3)
+ggplot(dane2, aes(Q, sqrt(T))) + geom_boxplot() + facet_wrap(~M) + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + scale_y_continuous(limits=c(0,20))
+```
+
+Okazuje siê, ¿e zarówno miêdzy zadaniami jak i w obrêbie danego zadania mamy istotne ró¿nice miêdzy czasem odpowiedzi na podpunkty. Spójrzmy jeszcze jakie s¹ to ró¿nice (odfiltrujmy zatem zadania z tylko jednym podpunktem).
+
+```{r, catche=TRUE}
+invisible(gc())
+ggplot(filter(dane2, M %in% c("M155","M411","M496","M564","M909","M915","M919","M939","M943","M948","M949","M954","M967","M982")), aes(Q, sqrt(T))) + geom_boxplot() + facet_wrap(~M) + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + scale_y_continuous(limits=c(0,20))
+rm(a3)
+```
+
+Patrz¹c na poszczególne zadania widzimy ró¿nego rodzaju zale¿noœci. Choæ ró¿nice s¹ istotne, to czasem dalsze podpunkty by³y wykonywane szybciej, a czasem wolniej. Jesteœmy sk³onni uznaæ, ¿e zarówno numer zadania i numer podpunktu w danym zadaniu maj¹ znaczenie i mo¿e to wynikaæ z tego, ¿e ka¿dy podpunkt jest jak oddzielne zadanie.
+
+### Model 4 i 5 - zale¿noœæ miêdzy czasem (M) a id podpunktu (Q) zagnie¿d¿onym w id zadania (M) oraz pozycj¹ (position)
+
+```{r, catche=TRUE}
+invisible(gc())
+a4 <- aov(sqrt(T)~M/Q+position, data=dane2)
+summary(a4)
+rm(a4)
+```
+
+Uwzglêdnienie pozycji w kwestionariuszu jest istotne wzglêdem modelu opartego na samych id zadañ.
+
+```{r, catche=TRUE}
+invisible(gc())
+a5 <- aov(sqrt(T)~position+M/Q, data=dane2)
+summary(a5)
+rm(a5)
+```
+
+Podobnie dzieje siê, gdy najpierw uwzglêdnimy pozycjê a potem zadania. Wniosek jest taki ¿e wszystkie te zmienne uwzglêdnimy w ostatecznym modelu. Przyjmij zatem ten model i przeprowadŸmy jego diagnostykê.
+
+## Diagnostyka
+
+## Model pierwiastkowy
+
+Spójrzmy na wykresy diagnostyczne naszego ostatecznego modelu (sqrt(T)~position+M/Q).
+
+```{r, catche=TRUE}
+invisible(gc())
+model_zad_1 <- lm(sqrt(T)~position+M/Q, data=dane2)
+plot(model_zad_1, which=1:6)
+```
+
+Wykres 1: "Residuals vs Fitted": œrednie reszty s¹ praktycznie sta³e, nie zale¿¹ od zmiennej objaœnianej. Werdykt pozytywny.
+Wykres 2 "Normal Q-Q": Widzimy odchylenia reszt od rozk³adu normalnego. Œrodkowy przedzia³ pokrywa siê jednak ca³kiem dobrze. Werdykt neutralny.
+Wykres 3 "Scale Location": Istnieje niewielka zale¿noœæ funkcyjna dla wariancji reszt. Wedykt neutralny.
+Wykres 4 "Cook's Distance": Miary Cooka s¹ mikroskopijne. Wedykt pozytywny.
+Wykres 5 "Residual's vs Leverage": Nie obserwujemy nietypowych obserwacji o du¿ej dŸwigni. Werdykt pozytywny.
+Wykres 6 "Cook's dist vs Leverage": Ponownie nie obserwujemy silnie zaburzaj¹cych obserwacji. Wedykt pozytywny.
+
+Wykonajmy jeszcze test jednorodnoœci wariancji
+
+```{r, catche=TRUE}
+invisible(gc())
+bptest(model_zad_1)
+```
+
+Werdykt negatywny.
+
+## Model boxa-coxa
+
+Spróbujmy jeszcze zastosowaæ jak najlepiej dopasowan¹ transformacjê z rodziny boxa-coxa, aby poprawiæ normalnoœæ reszt.
+
+```{r, catche=TRUE}
+invisible(gc())
+wynikBC = boxcox(T~position+M/Q, data=dane2)
+(wsp = wynikBC$x[which.max(wynikBC$y)])
+model_zad_2 = lm((T^wsp-1)/wsp~position+M/Q, data=dane2)
+par(mfrow = c(1,2))
+plot(model_zad_1, which=2)
+plot(model_zad_2, which=2)
+```
+
+Transformacja nie poprawi³a znacz¹co modelu, zatem pozostajemy przy modelu starym.
+
+## Podsumowanie
+
+Analizuj¹c kolejne modele uznaliœmy, ¿e zmienne M, Q oraz position s¹ istotne w modelu. Wybraliœmy model sqrt(T)~position+M/Q. Diagnostyka tego modelu jest dobra, choæ reszty nie s¹ do koñca normalne. Transformacja boxa-coxa nie pomaga jednak rozwi¹zaæ tego problemu.
