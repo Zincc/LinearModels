@@ -1,0 +1,155 @@
+---
+title: "Projekt modele liniowe i mieszane"
+subtitle: "Zadanie II"
+author: "Aleksandra Dąbrowska, Jan Dmitruk, Magda Młynarczyk"
+date: "20 March 2017"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+---
+```{r "setup", include=FALSE}
+#setwd("C:/Users/Magda/Documents/GitHub/Projekt-Pisa2015")
+setwd("C:/Users/O/Desktop/Moje dokumenty/GitHub/Projekt-Pisa2015")
+
+```
+
+```{r biblioteki, message=FALSE,warnings=FALSE}
+library(dplyr)
+library(MASS)
+library(knitr)
+library(lmtest)
+library(car)
+library(stringr)
+library(broom)
+library(ggplot2)
+
+load("dane_do_etapu2.rda")
+
+dane_model <- dane[,c(4,9,11,13,15)]
+dane_model <- unique(dane_model)
+dane_model$zadanie <- factor(dane_model$zadanie)
+
+model_zadanie_3 <- lm(log(czas_zadania)~zadanie*pozycja_zadania+id_kwestionariusza, data = dane_model)
+```
+
+#Diagnostyka modelu
+
+##Wykresy diagnostyczne dla wybranego modelu
+
+Dla `model_zadanie_3` wykonujemy wykresy diagnostyczne.
+
+```{r wykresy diagnostyczne}
+plot(model_zadanie_3, which = c(1:6))
+```
+
+Na wykresach widzimy, że nasz model pozytywnie przechodzi wykresy diagnostyczne z wyjątkiem wykresu `Q-Q Normal`, co może świadczyć, że reszty nie mają rozkładu normalnego.
+
+#Testy dla modelu
+
+Dla wybranego modelu wykonujemy testy diagnostyczne.
+```{r diagnostyka}
+bptest(model_zadanie_3)
+```
+
+Odrzucamy hipotezę mówiącą o jednorodności wariancji reszt.
+
+```{r}
+
+dwtest(model_zadanie_3)
+bgtest(model_zadanie_3)
+```
+
+Powyższe testy pokazują, że nie autokorelacja reszt rzędu 1 nie jest istotna, jednak autokorelacja rzędu wiekszego niż 1 jest już istotna.
+
+
+```{r}
+raintest(model_zadanie_3)
+```
+Test pokazuje, że model jest liniowy
+
+
+```{r}
+ks.test(model_zadanie_3$residuals, "pnorm")
+```
+Tak jak na wykresie diagnostycznym widzimy, że rozkład reszt nie jest normalny.
+
+
+##Wizualizacja modelu
+
+Na poniższym wykresie przedstawiamy współczynniki wybranego modelu.
+```{r, warning=F, message=F}
+dane_wykres <-tidy(model_zadanie_3)
+
+dane_wykres_1 <- dane_wykres[c(1:77),]
+dane_wykres_1$grupa <- substr(dane_wykres_1$term,1,7)
+dane_wykres_1[1,6] <- "Intercept"
+ggplot(dane_wykres_1, aes(estimate,term,group=grupa, color=grupa))+geom_point()+coord_flip()+theme(legend.position="top",
+      axis.text.x = element_text(angle = 90, hjust = 1),
+      title = element_text("Dopasowane współczynniki modelu"))
+```
+
+Zależność dopasowanego czasu rozwiązywania zadania od numeru zadania.
+
+```{r, message=F, warning=F}
+dane_wykres2 <- augment(model_zadanie_3)
+ggplot(dane_wykres2, aes(zadanie, exp(.fitted))) + geom_line()+
+  theme(legend.position="none",
+      axis.text.x = element_text(angle = 90, hjust = 1),
+      title = element_text("Dopasowane wartosci czasow"))
+
+```
+
+##Wykresy dla danych
+
+```{r}
+#wykresy dla danych
+
+dane_model2 <- dane[,c(3,4,9,11,13)]
+dane_model2 <- unique(dane_model2)
+
+dane_model2$id_kwestionariusza_2 <- paste(dane_model2$id_kwestionariusza,"_",dane_model2$pozycja_zadania,sep="")
+
+```
+
+
+Średni czas rozwiązywania kwestionariusza wraz z pozycją.
+```{r, kwestionariusz z pozycja}
+data2 <- dane_model2 %>% group_by(id_kwestionariusza_2,id_ucznia)%>% summarize(sum(czas_zadania))
+colnames(data2)[3]<- "czas"
+data3 <- data2 %>% group_by(id_kwestionariusza_2)%>%summarize(mean(czas))
+colnames(data3)[2]<- "czas"
+
+mean <- mean(data3$czas)
+
+ggplot(data3, aes(id_kwestionariusza_2,czas))+geom_point()+geom_hline(yintercept =mean, colour= "blue")+coord_flip()
+```
+
+
+Boxploty dla zadań
+```{r boxplot zadanie}
+ggplot(dane_model2 , aes(zadanie, czas_zadania))+geom_boxplot()+coord_flip()
+```
+
+
+Boxploty dla zadań z podziałem na pozycję zadania
+
+```{r boxplot }
+ggplot(dane_model2, aes(pozycja_zadania, czas_zadania)) +geom_boxplot()+ coord_flip()+ facet_wrap(~zadanie)
+```
+
+
+
+Patrzymy jak rozkłada się czas na pozycje zdań w kwestionariuszu.
+```{r boxplot pozycja zadania}
+data_2 <- dane %>% group_by(pozycja_zadania,id_ucznia)%>% summarize(sum(czas))
+colnames(data_2)[3]<- "czas"
+
+ggplot(data_2, aes(pozycja_zadania, czas)) +geom_boxplot()
+
+```
+
+
+#Podsumowanie
+Najlepszym ze zbudowanych modeli okazuje się ten zbudowany na podstawie zmiennych : `zadanie`, `pozycja_zadania` i `id_kwestionariusza`. Za miarę optymalności modelu przyjeliśmy kryterium `AIC`.
+Patrząc na wykresy dla modelu możemy zauważyć, że pozycja zadania w kwestionariuszu może mieć duże znaczenie w szybkości rozwiązywania zadania: może być tak, że jeśli zadania z matematyki są na początku bloku zadań jest im poświęcane więcej czasu. Z kolei jeśli zadania są na końcu są robione o wiele szybciej. Inną obserwacją jest ta, że kwestionariusze o niższych numerach są rozwiązywane dłużej.
