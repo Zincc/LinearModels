@@ -96,7 +96,10 @@ Maksymalna liczba punktów to uzyskania to 150. Oceny
 
 Zaliczenie jest tak skonstruowane by premiować systematyczną pracę - projekty i prace domowe.
 
-[Aktualna lista punktów](https://docs.google.com/spreadsheets/d/1xSeo9uKNtvn3fotDsFP9Ha0BV0s7bDrzyyD9a7TnCX8/edit?usp=sharing)
+Aktualna lista punktów
+----------------------
+
+[Prace domowe plus projekty](https://docs.google.com/spreadsheets/d/1xSeo9uKNtvn3fotDsFP9Ha0BV0s7bDrzyyD9a7TnCX8/edit?usp=sharing)
 
 Materiały
 ---------
