@@ -1,0 +1,163 @@
+---
+title: "Czynniki wp³ywaj¹ce na czas rozwi¹zywania zadañ z matematyki PISA 2015 - etap 2"
+author: "Micha³ Ciach, Ola Paluszyñska"
+date: "16 kwietnia 2017"
+output: 
+    html_document:
+        toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+```{r}
+library(ggplot2)
+library(moments) # obliczanie kurtozy i skoœnoœci rozk³adów
+library(MASS)
+library(nortest) # testy na normalnoœæ rozk³adu (Shapiro-Wilk nie dzia³a dla wektorów d³u¿szych ni¿ 5000)
+library(car) # funkcja qqPlot rysuje QQ-plot z przedzia³ami ufnoœci
+library(lmtest)
+setwd("~/UW/Modele_Liniowe_i_Mieszane/Projekt")
+```
+
+# Dane i model
+
+£adujemy dane po przekszta³eceniach z etapu 1 i szacujemy wybrany na tamtym etapie model
+
+```{r}
+load("sample_data.rda")
+przesuniecie <- 28788.38
+modelTaskQPosition <- lm(log(time + przesuniecie) ~ task + task:Q.nb + position, data = sample_data)
+```
+
+# Wizualizacja modelu
+
+Nastêpnym krokiem naszej analizy jest wizualizacja modelu. Na kolejnych wykresach przedstawimy oszacowania parametrów modelu dla poszczególnych zmiennych. Nale¿y pamiêtaæ, ¿e wartoœci wspó³czynników mo¿na interpretowaæ jako mno¿niki zmiennej objaœnianej po zastosowaniu do nich eksponenty gdy¿ zmienna objaœniana zosta³a potraktowana transformacj¹ logarytmiczn¹. Oznacza to, ¿e znak parametru mo¿na interpretowaæ bezpoœrednio jako kierunek zale¿noœci.
+
+```{r}
+coefs <- data.frame(Beta = summary(modelTaskQPosition)$coefficients[, 1], Variable_level = rownames(summary(modelTaskQPosition)$coefficients), p_value = summary(modelTaskQPosition)$coefficients[, 4])
+coefs$Significant0.01 <- as.factor(coefs$p_value < 0.01)
+coefs_task <- coefs[2:45,]
+coefs_taskQ.nb <- coefs[50:86,]
+coefs_position <- coefs[46:49,]
+```
+
+Na poni¿szym wykresie prezentujemy oszacowania parametrów dla poziomów zmiennej `task` (poziomem referencyjnym jest `r levels(sample_data$task)[1]`. Widaæ, ¿e wszystkie oszacowania oprócz jednego s¹ istotne przy poziomie istotnoœci 0.01, co wi¹¿e siê miêdzy innymi z wielkoœci¹ zbioru danych. Œredni czas rozwi¹zywania zadania jest ni¿szy tylko dla siedmiu zadañ w porównaniu z referencyjnym -- dla wiêkszoœci zadañ czas ten jest znacznie wy¿szy.
+
+```{r, fig.width = 8}
+coefs_task$Variable_level <- gsub("task", "", coefs_task$Variable_level)
+coefs_task <- within(coefs_task, Variable_level <- factor(coefs_task$Variable_level, levels = coefs_task[order(coefs_task$Beta, decreasing = TRUE), "Variable_level"]))
+ggplot(coefs_task, aes(y = Beta, x = Variable_level, fill = Significant0.01)) + geom_bar(stat = "identity") + theme(axis.text.x = element_text(angle = 45, hjust = 1)) + ggtitle("Parametry beta ospowiadaj¹ce poszczególnym zadaniom")
+```
+
+Poni¿szy wykres jest analogiczny do poprzedniego, przy czym dotyczy interakcji zagnie¿d¿onej zmiennej `Q.nb` w zmiennej `task`. Dla ka¿dej pary zadania i podpunktu kategori¹ referencyjn¹ jest podpunkt pierwszy tego zadania. Na wykresie widaæ, ¿e wszystkie oszacowania oprócz dwóch s¹ istotne, a zale¿noœci miêdzy czasami rozwi¹zywania podpunktów s¹ ró¿ne -- w niektórych zadaniach podpunkt drugi, trzeci lu czwarty jest rozwi¹zywany œrednio krócej, a w niektórych d³u¿ej ni¿ podpunkt pierwszy.
+
+```{r, fig.width = 8}
+coefs_taskQ.nb$Variable_level <- gsub("task", "", coefs_taskQ.nb$Variable_level)
+coefs_taskQ.nb$Variable_level <- gsub("Q.nb", "", coefs_taskQ.nb$Variable_level)
+coefs_taskQ.nb <- within(coefs_taskQ.nb, Variable_level <- factor(coefs_taskQ.nb$Variable_level, levels = coefs_taskQ.nb[order(coefs_taskQ.nb$Beta, decreasing = TRUE), "Variable_level"]))
+ggplot(coefs_taskQ.nb, aes(y = Beta, x = Variable_level, fill = Significant0.01)) + geom_bar(stat = "identity") + theme(axis.text.x = element_text(angle = 45, hjust = 1)) + ggtitle("Parametry beta ospowiadaj¹ce podpunktom zagnie¿d¿onym w zadaniach")
+```
+
+Poni¿szy wykres dotyczy parametrów dla pozycji w kwestionariuszu, przy czym kategori¹ referencyjn¹ jest tu pozycja pierwsza. Wszystkie parametry s¹ ujemne i istotne, co oznacza, ¿e najwy¿szy œredni czas rozwi¹zywania zosta³ zaobserwowany gdy zadanie by³o na pierwszej pozycji w kwestionariuszu. Mo¿na to interpretowaæ tak, ¿e uczniowie wdra¿ali siê w rozwi¹zywanie zadañ w miarê ich rozwi¹zywania.
+
+```{r}
+coefs_position$Variable_level <- gsub("position", "", coefs_position$Variable_level)
+coefs_position <- within(coefs_position, Variable_level <- factor(coefs_position$Variable_level, levels = coefs_position[order(coefs_position$Beta, decreasing = TRUE), "Variable_level"]))
+ggplot(coefs_position, aes(y = Beta, x = Variable_level, fill = Significant0.01)) + geom_bar(stat = "identity") + ggtitle("Parametry beta ospowiadaj¹ce pozycjom w kwestionariuszu")
+```
+
+# Diagnostyka reszt
+
+Za pomoc¹ szeregu wykresów i testów bazuj¹cych na resztach modelu sprawdzimy, czy spe³nione s¹ podstawowe za³o¿enia modelu regresji liniowej.
+
+## Liniowoœæ zale¿noœci
+
+Poni¿ej przedstawiamy wykres z wartoœciami dopasowanymi na osi X i resztami na osi Y:
+
+```{r, cache = TRUE}
+plot(modelTaskQPosition, which = 1)
+```
+
+Jak widaæ rozproszenie punktów jest doœæ równomierne w poziomie (odstêpy miêdzy pod³u¿nymi grupami obserwacji wynikaj¹ z uwzglêdnienia w modelu jedynie jakoœciowych zmiennych objaœniaj¹cych), a czerwona linia jest niemal¿e prosta, co œwiadczy o liniowoœci badanej zale¿noœci -- w przeciwnym razie zale¿noœæ na wykresie wygl¹da³aby na nieliniow¹. Warto zaznaczyæ, ¿e "przyciêcie" wykresu jakby równoleg³ymi prostymi mo¿e byæ konsekwencj¹ przyciêcia naszej zmiennej objaœnianej do sensownych czasów.
+
+## Obserwacje wp³ywowe
+
+Teraz zidentyfikujemy obserwacje wp³ywowe -- warto zaznaczyæ, ¿e obserwacje wp³ywowe nie s¹ tym samym, co odstaj¹ce (pierwsze wp³ywaj¹ na wyniki estymacji, a drugie s¹ nietypowe) i pierwsze z nich stanowi¹ potencjalnie wiêkszy problem, gdy¿ zmieniaj¹ wyniki analizy.
+
+### Odleg³oœæ Cooka
+
+Na poni¿szym wykresie przedstawiamy odleg³oœæ Cooka, podstawow¹ miarê wp³ywowoœci obserwacji:
+
+```{r, cache = TRUE}
+plot(modelTaskQPosition, which = 4)
+```
+
+Na podstawie wykresu mo¿emy stwierdziæ, ¿e ¿adna z obserwacji nie wyró¿nia siê specjalnie spoœród pozosta³ych pod wzglêdem odleg³oœci Cooka. Ponadto, wyraŸnie widaæ, ¿e obserwacje dziel¹ siê na dwie grupy pod wzglêdem rzêdu wielkoœci odleg³oœci Cooka (choæ ró¿nica miêdzy tymi dwoma grupami nie jest bardzo du¿a).
+
+Warto zaznaczyæ, ¿e zwykle przyjmuje siê 0.5 jako próg odciêcia odleg³oœci Cooka i usuwa siê obserwacje, dla których ta odleg³oœæ jest wy¿sza od progu. W naszym przypadku nie jest to spe³nione dla ¿adnej obserwacji, poniewa¿ przy tak du¿ym zbiorze danych jedna obserwacja ma zawsze stosunkowo niewielki wp³yw na wyniki estymacji. Z tego wzglêdu nie usuwamy wyró¿nionych na wykresie obserwacji ze zbioru.
+
+### Reszty a dŸwignia
+
+¯eby potwierdziæ wnioski wyci¹gniête z wykresu odleg³oœci Cooka przyjrzymy siê wykresowi reszt i dŸwigni, która mierzy nietypowoœæ wartoœci zmiennych objaœniaj¹cych:
+
+```{r, cache = TRUE}
+plot(modelTaskQPosition, which = 5)
+```
+
+Na tym wykresie wyraŸnie widaæ podzia³ obserwacji na dwie grupy -- o niskiej i wysokiej (wzglêdnie, ogólnie to s¹ ma³e wartoœci) dŸwigni. Wygl¹da jednak na to, ¿e nie obserwujemy zale¿noœci miêdzy resztami i dŸwigni¹ gdy¿ dla ka¿dej obserwowanej wartoœci dŸwigni obserwujemy prawie pe³en zakres zmiennoœci reszt.
+
+## Rozk³ad reszt modelu
+
+Teraz przeanalizujemy reszty naszego modelu. W tym celu wyznaczymy reszty standardowe i studentyzowane (przy tak du¿ej próbie jak nasza ró¿nica pomiêdzy nimi bêdzie niezauwa¿alna):
+
+```{r}
+reszty <- rbind(data.frame(reszty = rstandard(modelTaskQPosition), typ = "Reszty standardowe"), data.frame(reszty = rstudent(modelTaskQPosition), typ = "Reszty studentyzowane"))
+```
+
+### Jednorodnoœæ wariancji
+
+Kluczowym za³o¿eniem modelu regresji jest jednorodnoœæ wariancji reszt. Poni¿szy wykres pomaga zilustrowaæ sensownoœæ tego za³o¿enia dla naszego modelu:
+
+```{r, cache = TRUE}
+plot(modelTaskQPosition, which = 3)
+```
+
+Na wykresie widaæ, ¿e rozproszenie reszt roœnie wraz ze wzrostem wartoœci dopasowanych, co mo¿e oznaczaæ sprzecznoœæ z za³o¿eniem jednorodnoœci wariancji, dla potwierdzenia tego przeprowadzamy test Goldfeldaa-Quandta:
+
+```{r, cache = TRUE}
+gqtest(modelTaskQPosition, order.by = ~Q.nb, data = sample_data)
+```
+
+Przy ka¿dym sensownym poziomie istotnoœci odrzucamy hipotezê zerow¹ o równoœci wariancji przy podziale próby na dwie czêœci (po uszeregowaniu wed³ug zmiennej `Q.nb`). Sugeruje to pominiêcie istotnych zmiennych objaœniaj¹cych (na dalszym etapie analizy dodamy kolejne). Gdyby by³ to nasz ostateczny model, to moglibyœmy równie¿ zastosowaæ odpowiedni¹ poprawkê b³êdów standardowych.
+
+### Normalnoœæ rozk³adu
+
+Kolejnym za³o¿eniem modelu jest normalnoœæ rozk³adu reszt. Na poni¿szym wykresie przedstawiamy ten rozk³ad dla obu rodzajów reszt wraz z gêstoœci¹ rozk³adu normalnego o parametrach odpowiadaj¹cych statystykom z próby.
+
+```{r}
+ggplot(reszty, aes(x = reszty)) + geom_histogram(aes(y=..density..), binwidth = 0.3, color = "black", fill = "white") + stat_function(fun = dnorm, args=list(mean = mean(reszty$reszty), sd = sd(reszty$reszty)), color = "blue", size = 1) + ggtitle("Rozk³ad reszt modelu") + facet_grid(. ~ typ)
+```
+
+Na obu wykresach widaæ, ¿e rozk³ad naszych reszt jest trochê bardziej spiczasty od rozk³adu normalnego. Faktycznie, kurtoza rozk³adów reszt wynosi `r kurtosis(reszty$reszty[reszty$typ == "Reszty standardowe"])` oraz `r kurtosis(reszty$reszty[reszty$typ == "Reszty studentyzowane"])`, odpowiednio. Jest to niewiele wiêcej ni¿ wartoœæ 3 dla rozk³adu normalnego, jednak przy takiej du¿ej próbie taka spiczastoœæ z pewnoœci¹ spowoduje odrzucenie hipotezy o normalnoœci rozk³adu w teœcie statystycznym.
+
+Rozbie¿noœæ rozk³adu reszt od rozk³adu normalnego potwierdza równie¿ nastêpuj¹cy QQ-plot dla reszt studentyzowanych:
+
+```{r, cache = TRUE}
+qqPlot(reszty$reszty[reszty$typ == "Reszty studentyzowane"])
+```
+
+Ostatecznie potwierdzamy to testem:
+
+```{r}
+ad.test(reszty$reszty[reszty$typ == "Reszty standardowe"])
+ad.test(reszty$reszty[reszty$typ == "Reszty studentyzowane"])
+```
+
+Nasze reszty bez w¹tpienia nie maj¹ rozk³adu normalnego, jednak na podstawie histogramów stwierdzamy, ¿e rozbie¿noœæ nie jest na tyle du¿a, ¿eby zdyskwalifikowaæ zbudowany model, ale warto nad nim dalej popracowaæ, co niniejszym czynimy. 
+
+# Wnioski
+
+Przedstawiony model stanowi pierwsze podejœcie do zrozumienia czynników kszta³tuj¹cych czas rozwi¹zywania zadania. Ze wzglêdu na silnie skoœny rozk³ad zmiennej objaœnianej zastosowaliœmy optymaln¹ (spoœród rozwa¿anych) transformacjê logarytmiczn¹ z przeuniêciem. Niestety mimo tej transformacji przeprowadzone testy statystyczne wskazuj¹ na niejednorodnoœæ wariancji reszt i niezgodnoœæ ich rozk³adu z rozk³adem normalnym. Model ten wymaga zatem rozbudowania, przede wszystkim nale¿y rozpatrzyæ w³¹czenie kolejnych zmiennych objaœniaj¹cych.
+
