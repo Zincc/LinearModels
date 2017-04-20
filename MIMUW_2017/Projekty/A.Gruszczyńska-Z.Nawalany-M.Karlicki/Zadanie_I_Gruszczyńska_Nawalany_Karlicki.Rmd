@@ -1,0 +1,107 @@
+---
+title: Czynniki wpływające na czas rozwiązywania zadań z matematyki PISA 2015 - etap
+  I
+author: "Zofia Nawalany, Michał Karlicki, Agata Gruszczyńska"
+date: "22 marca 2017"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+#Cel
+Celem pierwszego etapu projektu jest zbudowanie modelu liniowego na podstawie danych z PISA 2015, a dokładniej, modelu opartego o cechy zadania - jego ID oraz pozycję w kwestionariuszu.
+
+#Dane i ich preparatyka
+Źródło danych do jego utworzenia stanowiła tabela PISA 2015 **"actionTimeScoreMath", którą skrótowo nazwano w poniżej pracy "atsm"**. 
+```{r, echo=FALSE}
+load("/Users/michalkarlicki/Downloads/actionTimeScoreMath.rda")
+#load("/Users/Gruszka/Documents/STUDIA/BioinformatykaUW/sem2_Bioinf/Biecek/Projekt R/actionTimeScoreMath.rda")
+#load("/home/zinc/studia/modele liniowe i mieszane/actionTimeScoreMath.rda")
+library(foreign)
+library(outliers)
+library(ggplot2)
+```
+```{r}
+atsm<-actionTimeScoreMath
+```
+
+Przed przystąpieniem do analizy **ze zbioru usunięto wybrane wiersze**. Były to te, zawierające wartości **"-1" i "NA" w kolumnie "position"** oraz wartości **"NA" w kolumnie "T" bądź "CNT"**. 
+
+```{r, echo=FALSE}
+atsm <- atsm[!atsm$position=="-1",]
+atsm <- atsm[!is.na(atsm$position),]
+atsm <- atsm[!is.na(atsm$T),]
+atsm <- atsm[!is.na(atsm$CNT),]
+atsm <- atsm[!is.na(atsm$S),]
+``` 
+
+#Wybór krajów
+Ze wzgledu na dużą ilość danych ograniczono ilość obserwacji przez wybór tych, które pochodziły z **krajów postkolonialnych**. W sumie było to 19 państw (lub regionów).
+  Dodatkowo odrzucono wiersze gdzie było 0 akcji "A" a wynik rozwiązania zadania pozytywny.
+```{r}
+atsm2<-atsm[atsm$CNT=="BRA      "|atsm$CNT=="SGP      "|atsm$CNT=="TTO      "|atsm$CNT=="TUN      "|atsm$CNT=="URY      "|atsm$CNT=="MAC      "|atsm$CNT=="PER      "|atsm$CNT=="MEX      "|atsm$CNT=="NZL      "|atsm$CNT=="DZA      "|atsm$CNT=="AUS      "|atsm$CNT=="CHL      "|atsm$CNT=="COL      "|atsm$CNT=="CRI      "|atsm$CNT=="DOM      "|atsm$CNT=="HKG      "|atsm$CNT=="IDN      "|atsm$CNT=="VNM      "|atsm$CNT=="ARG      ",]
+
+atsm2<-atsm2[!atsm2$A=="0"| atsm2$S=="Full credit",]
+```
+#Przerobienie danych na czas całego zadania 
+Dla tak przygotowanych danych stworzono analogiczną tabelę **atsm2** zawierającą zsumowany czas dla całego zadania.
+```{r, echo=FALSE}
+atsm_sorted<-atsm2[with(atsm2, order(CNTSTUID, item_short)),]
+q_id<-"0"
+q_t<-0
+atsm_sorted$question_time<-0
+atsm_sorted$item<-0
+atsm_sorted$podpunkt<-0
+
+for( i in c(1:669238)){
+  q_current <- strsplit(atsm_sorted$item_short[i], "")[[1]][1:4]
+  q_current <- paste(q_current[[1]], q_current[[2]],q_current[[3]],q_current[[4]], sep = "")
+  atsm_sorted$item[i] <- q_current
+  podpunkt <- strsplit(atsm_sorted$item_short[i], "")[[1]][5:7]
+  podpunkt <- paste(podpunkt[[1]], podpunkt[[2]],podpunkt[[3]], sep = "")
+  atsm_sorted$podpunkt[i]<-podpunkt
+  if(i!=1){
+    if(q_id!=q_current){
+    atsm_sorted$question_time[i-1]<-q_t
+    q_t<-atsm_sorted$T[i]
+    q_id<-q_current
+    }
+    else{
+      q_t<-q_t+atsm_sorted$T[i]
+    }
+  }
+  else{
+    atsm_sorted$question_time[1]<-atsm_sorted$T[1]
+  }
+}
+
+atsm2 <- atsm_sorted[!atsm_sorted$question_time==0,]
+
+```
+#Utworzone modele
+Do utworzenia modeli posłużono się czasem transformowanym **log**. Na końcu w materiałach dodatkowych można znaleźć histogramy dla transformacji log i sqrt na podstawie których wytypowano, która transformacja czasu będzie najodpowiedniejsza.
+  -model_liniowy1 - model badający zależność między czasem całego zadania a pozycją w kwestionariuszu 
+  -model_liniowy2 - model badajacy zależność między czasem całego zadania a ID zadania  
+  -model_liniowy3 - model badający zależności między czasme całego zadania a jego pozycją z zagnieżdżonym ID zadania
+```{r}
+model_liniowy1 <- lm(log(question_time)~position,data=atsm2)
+model_liniowy2 <- lm(log(question_time)~item,data=atsm2)
+model_liniowy3 <- lm(log(question_time)~position/item,data=atsm2)
+```
+#Wybór Modelu
+Wybrany został model model_liniowy3.
+```{r}
+anova(model_liniowy1)
+anova(model_liniowy2)
+anova(model_liniowy3)
+```
+
+#Materiały dodatkowe
+Histogramy czasu bez transormacji i transformowanego przez logarytm oraz pierwiastek.
+```{r}
+hist(atsm2$question_time)
+
+hist(log(atsm2$question_time))
+
+hist(sqrt(atsm2$question_time))
+```
