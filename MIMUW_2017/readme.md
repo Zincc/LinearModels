@@ -25,7 +25,7 @@ Planowana tematyka spotkań (może ulec drobnym zmianom w trakcie semestru)
 * 2017-04-04 - Prezentacja projektu, [Lab](https://github.com/pbiecek/LinearModels/blob/master/MIMUW_2017/Lab/07lab.Rmd)
 
 * 2017-04-11 - Jeden składnik losowy [notatki](https://rawgithub.com/pbiecek/LinearModels/master/MIMUW_2017/Wyklad/07_intro2mixedModels.html)
-* 2017-04-25 - Dwa składniki losowe (zagnieżdzone/hierarchincze)
+* 2017-04-25 - Dwa składniki losowe (zagnieżdzone/hierarchincze) [notatki](https://rawgithub.com/pbiecek/LinearModels/master/MIMUW_2017/Wyklad/08_intro2mixedModelsPart2.html), [Lab](https://github.com/pbiecek/LinearModels/blob/master/MIMUW_2017/Lab/08lab.Rmd)
 * 2017-05-09 - Dane panelowe i dowolne struktury korelacji
 
 * 2017-05-16 - Model regresji logistycznej i Poissona
