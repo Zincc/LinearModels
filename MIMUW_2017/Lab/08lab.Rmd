@@ -1,0 +1,40 @@
+---
+title: "Efekty losowe"
+author: "Przemyslaw Biecek"
+---
+
+## Zbiór danych o demencji
+
+Przeprowadzimy meta-analizę danych o demencji, pochodzących z różnych publikacji.
+
+<img width="600px" src="dementia.png"/>
+
+### Pytanie
+
+Używamy skali MMSE (mini-mental score) do oceny poziomu demencji jako funkcja wieku i płci. 
+
+```{r}
+head(dementia)
+summary(dementia)
+```
+
+Różne publikacje prowadzone były na różnych populacjach, związek wieku, płci i demencji może być różny w różnych krajach.
+
+### Test ilorazu wiarogodności
+
+Potraktuj zmienną `study` jako efekt losowy. 
+
+Użyj metod ML i REML aby ocenić czy i jaki jest związek wieku i płci z demencją (które podejście jest lepsze).
+
+Rozważ takie warianty:
+
+- poziom demencji w różnych badaniach jest różny,
+- zależmość pomiędzy wiekiem i płcią a demencją w różnych badaniach jest różny,
+- istnieje interakcja pomiędzy płcią a wiekiem.
+
+Dla wybranego modelu przeprowadź testy istotności współcznników.
+Spróbuj użyć testów permutacyjnych vs. test Walda lub LRT.
+
+Na bazie wyników modelu opisz wpływ wieku i płci na demencje.
+Jakim wykresem najlepiej opisać tą zależność.
+
