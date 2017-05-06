@@ -7,11 +7,24 @@ output:
   html_document: default
   pdf_document: default
 ---
+#Spis treści  
+[1.Cel](#1.Cel)  
+[2.Streszczenie etapu I](#2.Streszczenie etapu I)  
+[3.Dane i ich preparatyka](#3.Dane i ich preparatyka)  
+[4.Wybór krajów](#4.Wybór krajów)  
+[5.Przerobienie danych na czas całego zadania](#5.Przerobienie danych na czas całego zadania)  
+[6.Utworzone modele](#6.Utworzone modele)  
+[7.Wybór modelu](#7.Wybór modelu)  
+[8.Materiały dodatkowe](#8.Materiały dodatkowe)  
 
-#Cel
-Celem pierwszego etapu projektu jest zbudowanie modelu liniowego na podstawie danych z PISA 2015, a dokładniej, modelu opartego o cechy zadania - jego ID oraz pozycję w kwestionariuszu.
 
-#Dane i ich preparatyka
+#1.Cel <a name="1.Cel"></a>
+Celem pierwszego etapu projektu jest zbudowanie modelu liniowego na podstawie danych z PISA 2015, a dokładniej, modelu opartego o cechy zadania - jego ID oraz pozycję w kwestionariuszu. 
+
+#2.Streszczenie etapu I <a name="2.Streszczenie etapu I"></a>
+Wybrany przez nas model opisuje zależność między czasem całego zadania a jego pozycją z zagnieżdżonym ID zadania. Wybór oparliśmy o analizę wariancji ANOVA, która wskazała na istotną różnice pomiędzy tworzącymi się grupami. Zmienną objaśnianą stanowi zlogarytmowany czas wykonania całego zadania, który przyjmuje rozkład najbardziej zbliżony do rozkładu normalnego spośród przeanalizowanych (pkt 8).
+
+#3.Dane i ich preparatyka <a name="3.Dane i ich preparatyka"><a/>
 Źródło danych do jego utworzenia stanowiła tabela PISA 2015 **"actionTimeScoreMath", którą skrótowo nazwano w poniżej pracy "atsm"**. 
 ```{r, echo=FALSE}
 load("/Users/michalkarlicki/Downloads/actionTimeScoreMath.rda")
@@ -35,7 +48,7 @@ atsm <- atsm[!is.na(atsm$CNT),]
 atsm <- atsm[!is.na(atsm$S),]
 ``` 
 
-#Wybór krajów
+#4.Wybór krajów <a name="4.Wybór krajów"></a>
 Ze wzgledu na dużą ilość danych ograniczono ilość obserwacji przez wybór tych, które pochodziły z **krajów postkolonialnych**. W sumie było to 19 państw (lub regionów).
   Dodatkowo odrzucono wiersze gdzie było 0 akcji "A" a wynik rozwiązania zadania pozytywny.
 ```{r}
@@ -43,7 +56,7 @@ atsm2<-atsm[atsm$CNT=="BRA      "|atsm$CNT=="SGP      "|atsm$CNT=="TTO      "|at
 
 atsm2<-atsm2[!atsm2$A=="0"| atsm2$S=="Full credit",]
 ```
-#Przerobienie danych na czas całego zadania 
+#5.Przerobienie danych na czas całego zadania <a name="5.Przerobienie danych na czas całego zadania"></a>
 Dla tak przygotowanych danych stworzono analogiczną tabelę **atsm2** zawierającą zsumowany czas dla całego zadania.
 ```{r, echo=FALSE}
 atsm_sorted<-atsm2[with(atsm2, order(CNTSTUID, item_short)),]
@@ -76,27 +89,29 @@ for( i in c(1:669238)){
 }
 
 atsm2 <- atsm_sorted[!atsm_sorted$question_time==0,]
+save(atsm2, file="data.Rda")
 
 ```
-#Utworzone modele
+#6.Utworzone modele <a name="6.Utworzone modele"></a>
 Do utworzenia modeli posłużono się czasem transformowanym **log**. Na końcu w materiałach dodatkowych można znaleźć histogramy dla transformacji log i sqrt na podstawie których wytypowano, która transformacja czasu będzie najodpowiedniejsza.
   -model_liniowy1 - model badający zależność między czasem całego zadania a pozycją w kwestionariuszu 
   -model_liniowy2 - model badajacy zależność między czasem całego zadania a ID zadania  
-  -model_liniowy3 - model badający zależności między czasme całego zadania a jego pozycją z zagnieżdżonym ID zadania
+  -model_liniowy3 - model badający zależności między czasem całego zadania a jego pozycją z zagnieżdżonym ID zadania
 ```{r}
 model_liniowy1 <- lm(log(question_time)~position,data=atsm2)
 model_liniowy2 <- lm(log(question_time)~item,data=atsm2)
 model_liniowy3 <- lm(log(question_time)~position/item,data=atsm2)
 ```
-#Wybór Modelu
+#7.Wybór modelu <a name="7.Wybór modelu"></a>
 Wybrany został model model_liniowy3.
 ```{r}
 anova(model_liniowy1)
 anova(model_liniowy2)
 anova(model_liniowy3)
 ```
+Dla wszystkich modeli analiza wariancji wskazuje na istotne różnice pomiędzy tworzącymi się grupami.
 
-#Materiały dodatkowe
+#8.Materiały dodatkowe <a name="8.Materiały dodatkowe"></a>
 Histogramy czasu bez transormacji i transformowanego przez logarytm oraz pierwiastek.
 ```{r}
 hist(atsm2$question_time)
