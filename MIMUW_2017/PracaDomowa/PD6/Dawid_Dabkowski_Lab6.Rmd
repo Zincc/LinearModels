@@ -1,0 +1,241 @@
+---
+title: "cw6"
+author: "Dawid D�bkowski"
+date: "21.03.2017"
+output: html_document
+---
+
+```{r, warning=F, message=F}
+library(rmarkdown)
+library(dplyr)
+library(ggplot2)
+library(lattice)
+library(e1071)
+library(lmtest)
+library(partykit)
+```
+Plan na spotkanie
+
+Pobierz plik `df.rda` i wykonaj na nim poniższe zadania https://github.com/pbiecek/LinearModels/blob/master/MIMUW_2017/Lab/df.rda
+
+```{r}
+load("df.rda")
+summary(df)
+```
+
+1. Wykonaj analizę jednokierunkową wariancji ze zmienną `V1`. Ustaw poziom `B` jako poziom referencyjny.
+
+```{r}
+df$V1 <- relevel(df$V1, ref="B")
+model1 <- lm(y~V1, data=df)
+(a1 <- anova(model1))
+summary(model1)
+```
+
+Zmienna zależy od V1, wszystkie poziomy V1 odbiegają od referencyjnej średniej B.
+
+2. Połącz w zmiennych `V1` i `V2` poziomy `B` i `C` ze sobą, a następnie wykonaj test weryfikujący istotność interakcji.
+
+```{r}
+df <- mutate(df, V1 = ifelse(V1 %in% c("B","C"), "BC", "A"))
+df$V1 <- as.factor(df$V1)
+df <- mutate(df, V2 = ifelse(V2 %in% c("B","C"), "BC", "A"))
+df$V2 <- as.factor(df$V2)
+
+interaction.plot(df$V1, df$V2, df$y)
+model2 <- lm(y~V1*V2, data=df)
+summary(model2)
+(a2 <- anova(model2))
+```
+
+Interakcje nie zachodz�.
+
+3. Dla zmiennej `V1` porównaj wyniki dla różnych kontrastów, przynajmniej Helmerta, poly i sum.
+
+```{r}
+model3 <- lm(y~V1, data=df, contrasts=list(V1=contr.helmert(2)))
+summary(model3)
+model4 <- lm(y~V1, data=df, contrasts=list(V1=contr.poly(2)))
+summary(model4)
+model5 <- lm(y~V1, data=df, contrasts=list(V1=contr.sum(2)))
+summary(model5)
+```
+
+Wszystkie kontrasty pokazują istotność kolejnych grup referencyjnych.
+
+4. Wykonaj test post hoc dla zmiennej `V3`. Które poziomy różnią się pomiędzy sobą?
+
+```{r}
+(t6 <- TukeyHSD(aov(y~V3, data=df)))
+plot(t6, las=1)
+```
+
+Żadne poziomy nie różnią się istotnie średnimi.
+
+5. Zweryfikuj istotność zależności od zmiennej `V4`
+
+```{r}
+model7 <- lm(y~V4, data=df)
+summary(model7)
+```
+
+Odrzucamy hipotezę o zależności od zmiennej V4.
+
+6. Czy istotna jest interakcja pomiędzy V4 a V1? Jak pokazać tę zależność.
+
+```{r}
+model8 <- lm(y~V4*V1, data=df)
+summary(model8)
+(a8 <- anova(model8))
+xyplot(y~V4|V1, data=df, type=c("p","r"))
+```
+
+Interakcja nie jest istotna (pomimo tego, że wykres sugeruje co innego).
+
+7. Zweryfikuj zależność od zmiennej `V5`. A co jeżeli ta zależność nie jest liniowa? Sprawdź zależność od wielomianu stopnia 3.
+
+```{r}
+model9 <- lm(y~V5, data=df)
+summary(model9)
+(a9 <- anova(model9))
+```
+
+Zależność liniowa nie jest istotna. Sprawdzimy zależność od wielomianu stopnia 3.
+
+```{r}
+plot(df$V5, df$y)
+model10 <- lm(y~poly(V5,3), data=df)
+summary(model10)
+(a10 <- anova(model10))
+```
+
+Widzimy zależność od wielomianu stopnia 3 (a właściwie to lepszą od wielomianu stopnia 2).
+
+8. Zbuduj nową zmienną `NV := V4 - 2*V5`. Zbadaj związek z tą zmienną.
+
+```{r}
+df <- mutate(df, NV=V4-2*V5)
+model11 <- lm(y~NV, data=df)
+summary(model11)
+(a11 <- anova(model11))
+```
+
+Zależność nie jest istotna.
+
+9. Wybierz model optymalny według kryterium BIC - zrób przegląd pełny wszystkich modeli.
+
+```{r}
+zm <- colnames(df)[2:12]
+wsp = (bincombinations(length(zm))==1)[-1,]
+params = matrix(0, nrow(wsp), 4)
+for (i in 1:nrow(wsp)) {
+     form = as.formula(paste("y~", paste(zm[wsp[i,]], collapse="+")))
+     model12 = lm(form, data=df)
+     params[i,1] = AIC(model12, k=log(nrow(df)))
+     params[i,2] = model12$rank
+     params[i,3] = summary(model12)$adj.r.squared
+     params[i,4] = AIC(model12)
+}
+params <- as.data.frame(params)
+colnames(params) <- c("BIC", "rank", "adjR2", "AIC")
+head(params)
+```
+
+Model optymalny wed�ug kryterium BIC:
+
+```{r}
+as.formula(paste("y~",paste(zm[wsp[which.min(params$BIC),]], collapse="+")))
+```
+
+10. Wybierz model optymalny według kryterium AIC - użyj funkcji step.
+
+```{r}
+tmpFun = function(fit, aic) {
+     list(size = length(fit$coefficients), aic = aic, likelihood = logLik(fit)) 
+}
+
+ model13 = step(lm(y~., data=df), k=2, keep=tmpFun, trace=0)
+
+ kolumny = colnames(df)[2:12]
+ maxModel = as.formula(paste("~",paste(kolumny,collapse="+")))
+
+# od modelu pustego do optymalnego
+model14 = step(lm(y~1, data=df), scope=list(upper = maxModel, lower = ~1), direction ="forward", k=2, keep=tmpFun, trace=0)
+
+# od wybranego modelu do optymalnego
+model15 = step(lm(y~V1+V4, data=df), scope=list(upper = maxModel, lower = ~1), k=2, keep=tmpFun, trace=0)
+ 
+model15$keep
+```
+
+Narysujmy �cie�ki.
+
+```{r}
+getMD <- function(md) {
+  data.frame(size = unlist(apply(md, 2, `[`, 1)),
+             aic = unlist(apply(md, 2, `[`, 2)))
+}
+
+df1 <- getMD(model13$keep)
+df2 <- getMD(model14$keep)
+df4 <- getMD(model15$keep)
+
+pl <- ggplot() +
+  geom_point(data=df1, aes(size, aic)) +
+  geom_line(data=df1, aes(size, aic)) +
+  geom_point(data=df2, aes(size, aic), color="blue") +
+  geom_line(data=df2, aes(size, aic), color="blue") +
+  geom_point(data=df4, aes(size, aic), color="red")  +
+  geom_line(data=df4, aes(size, aic), color="red") 
+
+pl
+pl + xlim(15,25) + ylim(-4780, -4750)
+```
+
+Jak wida� metod� step otrzymujemy tu ten sam model, bez wzgl�du na to czy startujemy z modelu pustego, pe�nego czy wybranego. Jest to model:
+
+```{r}
+model13
+model14
+model15
+```
+
+11. Wykonaj diagnostykę reszt. Czy są obserwacje odstające/wpływowe?
+
+```{r}
+plot(model15, which=1:6)
+bptest(model15)
+```
+
+Residuals vs Fitted: Reszty nie zale�� wyra�nie od zmiennej obja�nianej. Wynik pozytywny.
+
+Normal Q-Q: Kwantyle uk�adaj� si� z grubsza wzd�u� przek�tnej. Pewien problem z lewym ogonem. Wynik neutralny.
+
+Scale Location: Wariancja reszt nie zale�y istotnie od zmiennej obja�nianej. Wynik pozytywny.
+
+Residuals vs Leverage: Nie widzimy obserwacji o bardzo odstaj�cej d�wigni. Wynik pozytywny.
+
+Cook's distance: Wszystkie obserwacje s� typowe, miara Cook'a poni�ej 1. Wynik pozytywny.
+
+Cook's dist vs Leverage: Raczej nie ma obserwacji bardzo wp�ywowych. Wynik pozytywny.
+
+bptest: Wariancje reszt nie s� jednorodne. Wynik negatywny.
+
+12. Zweryfikuj istotność interakcji `V6` i `V7`.
+
+```{r}
+model16 <- lm(y~V6:V7, data=df)
+summary(model16)
+(a16 <- anova(model16))
+```
+
+Interakcje te nie s� istotne.
+
+13. Porównaj wyniki z wynikami funkcji `ctree` pakiet `partykit`.
+
+```{r}
+(r17 <- ctree(y~., data=df))
+```
+
+14. Użyj funkcji `optim()` aby znaleźć oceny współczynników z kryterium do optymalizacji `abs(y - Xb)`
+15. Funkcja `rlm` z pakietu `MASS` wykonuje regresję odporną. Sprawdź jak wpłynie ona na ocenę współczynników.

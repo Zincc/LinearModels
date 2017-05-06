@@ -1,0 +1,422 @@
+---
+title: "Wprowadzenie do modeli mieszanych"
+author: "Przemyslaw Biecek"
+output: 
+  html_document:
+    toc: TRUE
+---
+
+# Postać modelu
+
+Przypomnijmy postać modelu dla modeli mieszanych, mówiliśmy o niej na ostatnich zajęciach.
+
+<img width="1000px" src="mm/mm01.png">
+
+$\varepsilon$ i $u$ odpowiadają efektom losowym, to wielowymiarowe zmienne losowe o rozkładzie normalnym z macierzą wariancji $I$ i $D$.
+
+Tak więc rozkład y to.
+
+<img width="1000px" src="mm/mm02.png">
+
+# Estymacja
+
+W jaki sposób estymuje się parametry w takim modelu? 
+Przedstawimy dwa podejścia, zacznijmy od metody największej wiarogodności.
+
+Zaczynamy od funkcji największej wiarogodności.
+
+<img width="1000px" src="mm/mm06.png">
+
+Łatwiej będzie pracować z funkcją -2 logarytmy z funkcji wiarogodności. Po usunięciu stałych mamy.
+
+<img width="1000px" src="mm/mm08.png">
+
+## Profiling
+
+Ile mamy parametrów w tym modelu?
+
+Ponieważ parametry będziemy estymować w sposób numeryczny. Postarajmy się więc zmniejszyć wymiar przestrzeni parametrów usuwając te, które można wyznaczyć w sposób analityczny - ten proces nazywa się profilowaniem.
+
+Wiele stopni swobody możemy usunąć przez wyprofilowanie parametrów w $\beta$.
+
+Zauważ, że dla znanego $V$ można ocenić parametry $\beta$ ze wzoru na ważone najmniejsze kwadraty.
+
+<img width="1000px" src="mm/mm09.png">
+
+W podobny sposób można wydobyć $\sigma^2$ z macierzy $V$. Rozdzielmy te parametry w poniższym zapisie.
+
+<img width="1000px" src="mm/mm10.png">
+
+Tutaj potrzebna jest krótka dyskusja. Zmniejszyliśmy liczbę parametrów do estymacji, ale wciąż są to parametry zakłócające (confounding parameters). 
+
+Z tego powodu często rozważa się inną metodę estymacji opartą o funkcję resztowej/ograniczonej funkcji wiarygodności (restricted maximum likelihood, REML). 
+
+Pomysł stojący za metodą REML to usunięcie zakłócającego wpływu oceny parametrów $\beta$ przez niezależną estymację parametrów z $V$ na przestrzenia ortogonalnej do $X$ (przestrzeń bez parametrów $\beta$).
+
+<img width="1000px" src="mm/mm03.png">
+
+I postać modeli bez $\beta$
+
+<img width="1000px" src="mm/mm04.png">
+
+I dla takiego modelu możemy zapisać funkcję wiarogodności.
+
+<img width="1000px" src="mm/mm11.png">
+
+## More profiling
+
+Tak jak powiedzieliśmy, możemy wyprofilować też $\sigma^2$ (poniżej $V^*$ to $V/\sigma^2$)
+
+Skoro rozdzieliliśmy $V^2$ i $\sigma^2$, można teraz policzyć pochodną po $\sigma^2$ i otrzymać
+
+<img width="1000px" src="mm/mm12.png">
+
+Po tym profilowaniu wystarczy wyestymować parametry $\theta$ w macierzy $V$. Funkcja wiarogodności dla $\theta$
+
+<img width="1000px" src="mm/mm13.png">
+
+## Newton Raphson
+
+A więc jak wyestymować parametry w $\theta$? 
+
+Można użyć ogólnego schematu optymalizacji Newtona-Raphsona,
+
+<img width="1000px" src="mm/mm05.png">
+
+potrzebujemy tylko wektora pierwszych pochodnych i macierzy drugich pochodnych dla  $\theta$.
+
+W ogólności te pochodne wylicza się w dosyć żmudny sposób....
+
+Dla ML
+
+<img width="1000px" src="mm/mm14.png">
+
+Dla REML
+
+<img width="1000px" src="mm/mm15.png">
+
+W ogolności nie jest to proste, ale dla wielu modelu otrzymuje się proste macierze $D$ a przez to i macierz $V$ ma prostą postać.
+
+<img width="1000px" src="mm/mm16.png">
+
+macierz $V$ redukuje się do
+
+<img width="1000px" src="mm/mm17.png">
+
+## Równania Hendersona
+
+Jak dotąd traktowaliśmy $u$ jako losowe wartości, ale czasem warto by było znać ich oceny. Słowo 'ocena' nie jest właściwe, ponieważ rezerwowaliśmy je dla parametrów stałych w modelu, dlatego będziemy używać słowa `predykcje`.
+
+A więc jak policzyć predykcje dla $u$?
+
+Charles Hnderson zastosował by oprzeć je na funkcji wiarogodności dla wektora stałych i losowych parametrów $(\beta, u)$.
+
+<img width="1000px" src="mm/mm20.png">
+
+Minimalizacja z uwagi na $u$ i $\beta$ jest równoważna minimalizacji
+
+<img width="1000px" src="mm/mm21.png">
+
+I ostatecznie dostajemy równania Hendersona
+
+<img width="1000px" src="mm/mm18.png">
+
+# Rozkłady dla ocen $\beta$ i $u$
+
+Z powyższego wzoru dostajemy też rozkład dla macierzy wariancji  $\beta$ i $u$
+
+<img width="1000px" src="mm/mm22.png">
+
+# Jak testować parametry w modelu?
+
+Zazwyczaj stosuje się trzy podejścia
+
+- Test Walda (for n >> p), i.e. $\hat\beta/se(\hat\beta)$ ma rozkład asymptotyczny $N(0,1)$,
+- Test ilorazu wiarygodności, rozkład asymptotyczny statystyki testowej to rozkład $\chi^2$
+- testy permutacyjne (bardziej wymagające obliczeniowo, ale o mniejszych założeniach dotyczących rozkładów).
+
+# Jeden komponent losowy
+
+## Dane `corn` 
+
+Zacznijmy od modelu dla ekspresji genów kukurydzianych.
+
+### Pytanie
+
+Chcemy zbadać efekt temperatury (chłód, kontrola) na różne linie kukurydzy. 
+Dla każdej linii mamy 4 pomiary (tak zwane powtórzenia techniczne) i te pomiary są dla 3 roślin (powtórzenia biologiczne).
+
+
+```{r, message=FALSE, warning=FALSE}
+library(PBImisc)
+corn[1:3,1:7]
+# DH.C.1 DH.C.1 DH.C.1 DH.C.2 DH.C.2 DH.C.2 DH.C.3
+# MZ00056801 12.203489 8.769006 6.846193 5.369957 7.355085 6.431522 5.998226
+# MZ00056807 6.133096 9.637903 6.772756 4.433962 7.644376 9.234691 6.629690
+# MZ00056825 7.244813 6.984742 7.930812 5.531837 7.258159 8.389686 8.040021
+```
+
+Zobaczmy jak wygląda model dla jednego genu
+
+```{r}
+# We will convert column names into three dependent variables
+cnames = colnames(corn)
+X = t(matrix(unlist(strsplit(cnames, ".", fixed=T)), 3, 36))
+X = data.frame(X)
+colnames(X) = c("species", "temperature", "plant")
+
+summary(X)
+```
+
+Wybierzmy jeden gen
+
+```{r, warning=FALSE, message=FALSE}
+y = corn[4613,]
+
+library(lattice)
+bwplot(y~species:temperature, data=X)
+# let's see what are the averages in each group
+by(y, X$species:X$temperature, mean)
+```
+
+A więc jak wyglądają modele z dla tego genu?
+
+### Trzy modele, trzy oceny
+
+```{r}
+summary(lm(y~species*temperature, data=X))
+summary(lm(y~species:temperature, data=X))
+
+library(lme4)
+model1 = lmer(y~species*temperature + (1|plant:species:temperature), data=X)
+summary(model1)$coefficients
+
+modelM = lmer(y~species*temperature + (1|plant:species:temperature), data=X, contrasts = list(species="contr.sum", temperature="contr.sum"))
+printCoefmat(summary(modelM)$coef[1:4,])
+
+modelL = lm(y~species*temperature + plant:species:temperature, data=X, contrasts = list(species="contr.sum", temperature="contr.sum"))
+printCoefmat(summary(modelL)$coef)
+```
+
+### Testujemy dla każdego genu
+
+Powtórzmy te obliczenia dla każdego genu
+
+```{r, cache=TRUE, warning=FALSE, message=FALSE}
+N = nrow(corn)
+# p-values for fixed effects will be stored in mat matrix
+mat_random = matrix(0, N, 3)
+mat_fixed = matrix(0, N, 3)
+# variance components will be stored in the matrix war
+war = numeric(N)
+for (i in 1:N) {
+ y = corn[i,]
+ model = lmer(y~species*temperature + (1|plant:species:temperature), data=X, contrasts = list(species="contr.sum", temperature="contr.sum"))
+ mat_random[i,] = summary(model)$coef[2:4,3]
+ war[i] = var(ranef(model)[[1]])
+ 
+ modelL = lm(y~species*temperature + plant:species:temperature, data=X, contrasts = list(species="contr.sum", temperature="contr.sum"))
+ mat_fixed[i,] = summary(modelL)$coef[2:4,3]
+}
+head(mat_random)
+head(mat_fixed)
+```
+
+Jak podsumować wyniki tego testowania?
+
+Można wykorzystac diagramy Venna.
+
+```{r, cache=TRUE}
+alpha = 0.001
+(c = -qnorm(alpha/2))
+tmp = as.data.frame(abs(mat_fixed) > c)
+colnames(tmp) = c("species","temperature","interaction")
+tmp2 = as.data.frame(abs(mat_random) > c)
+colnames(tmp2) = c("species","temperature","interaction")
+library(gplots)
+venn(tmp)
+venn(tmp2)
+```
+
+Modele z  efektem stałym mają więcej istotnych genów. Ale czy to nie jest artefakt większej wariancji tych ocen?
+
+Modele z efektem losowym mają mniej istotnych genów, ale przecięcie istotnych genów jest większe.
+
+# Dwa komponenty
+
+## The EUNOMIA study 
+
+Przykład dotyczyć będzie badania EUNOMIA: European Evaluation of Coercion in Psychiatry and Harmonisation of Best Clinical Practise
+
+* BPRS - średnia dla Brief Psychiatric Rating Scale, mierzona w czasach: T1, T2 and T3
+* CAT - Clients Scale for Assessment of Treatment, krótka ocena, mierzy ocenę leczeni aprzez pacjenta, mierzona w czaach: T1, T2 and T3
+* MANSA.T1, MANSA.T2, MANSA.T3 - Skala dla Quality of Life (Manchester Short Assessment of Quality of Life), mierzona w czasach: T1, T2 and T3
+* ICD10 - International Statistical Classification of Diseases and Related Health Problems 10th Revision (ICD-10)
+
+<img width="600px" src="CAT.png"/>
+<img width="600px" src="BPRS.png"/>
+<img width="600px" src="MANSA.png"/>
+
+Z jakimi danymi będziemy pracowali
+
+```{r}
+library(PBImisc)
+summary(eunomia[,c(1:5,9:11,15)])
+```
+
+### Pytanie
+
+Czy jest zależność pomiędzy liczbą hospitalizacji a liczbą/natężeniem objawów?
+
+Zacznijmy od prostego modelu
+
+```{r}
+library(lattice)
+xyplot(BPRS.T2 ~ NUM.HOSP, eunomia, type = c("g","p","r"), pch=19)
+```
+
+Klasyczne efekty stałe
+
+```{r}
+summary(lm(BPRS.T2 ~ NUM.HOSP, eunomia))
+summary(lm(BPRS.T2 ~ NUM.HOSP+AGE+GENDER, eunomia))
+```
+
+### Więcej zmiennych
+
+Warto by uwzględnić jeszcze dwa czynniki, ośrodek i diagnozę
+
+Ale jak?
+
+```{r}
+bwplot(CENTRE13~BPRS.T2, data=eunomia)
+
+eunomia$ICD103 <- factor(substr(eunomia$ICD10,1,3))
+eunomia$ICD103 <- reorder(eunomia$ICD103, eunomia$BPRS.T2, mean)
+bwplot(ICD103~BPRS.T2, data=eunomia)
+```
+
+Jak zależność pomiędzy NUM.HOSP i BPRS wygląda w różnych ośrodkach?
+
+```{r}
+xyplot(BPRS.T2 ~ NUM.HOSP | CENTRE13, eunomia, type = c("g","p","r"), index = function(x,y) coef(lm(y ~ x))[1])
+```
+
+### Modelowanie
+
+Jeżeli traktujemy CENTER i ICD10 jako efekty stałe (bez efektów losowych).
+
+```{r}
+library(lme4)
+lmer(BPRS.T2~NUM.HOSP + (1|CENTRE13) + (1|ICD10), data=eunomia)
+
+# Wald test
+# H_0: mu = 0
+# (Intercep) = 26.37
+2*pnorm(26.37, lower.tail=FALSE)
+# H_0: beta_NUM.HOSP = 0
+# (NUM.HOSP) = 19.29
+2*pnorm(19.29, lower.tail=FALSE)
+```
+
+### ML test
+
+Porównajmy model z i bez określonej cechy.
+
+```{r}
+modelFull = lmer(BPRS.T2~NUM.HOSP + (1|CENTRE13) + (1|ICD10), data= eunomia, REML=F)
+modelwithoutINT = update(modelFull, . ~ . -1)
+modelwithoutNUM = update(modelFull, . ~ . -NUM.HOSP)
+```
+
+Funkcje wiarogodności dla tych modeli to
+
+```{r}
+logLik(modelFull)
+logLik(modelwithoutINT)
+logLik(modelwithoutNUM)
+```
+
+Możemy też policzyć p-wartości dla testu ilorazu funkcji wiarogodności.
+
+```{r}
+anova(modelFull, modelwithoutINT)
+anova(modelFull, modelwithoutNUM)
+```
+
+### Permuacje
+
+Alternatywne podejście
+
+```{r}
+N = 99
+logs = replicate(N,
+ logLik(lmer(BPRS.T2~sample(NUM.HOSP) + (1|CENTRE13) + (1|ICD10),
+data=eunomia, REML=F)))
+(sum(logs > logLik(modelFull))+1)/(N+1)
+```
+
+### Testy dla efektów losowych
+
+Jak testować całą losową komponentę?
+
+Z testem LRT można testować dowolną liczbę parametrów.
+
+```{r}
+logLik(model1<-lmer(BPRS.T2~NUM.HOSP + (1|CENTRE13) + (1|ICD10), data= eunomia))
+logLik(model2<-update(model1, . ~ . -(1|CENTRE13)))
+logLik(model3<-update(model1, . ~ . -(1|ICD10)))
+
+# without both random components
+logLik(model4 <- lm(BPRS.T2~NUM.HOSP, data=eunomia))
+# with ICD10 and CENTER effects included as a fixed effects
+logLik(model5 <- lm(BPRS.T2~NUM.HOSP+ICD10+CENTRE13, data=eunomia))
+
+anova(model1, model2)
+anova(model1, model3)
+```
+
+### Permutacje
+
+A teraz test permutacyjny dla efektów losowych.
+
+Zauważ, że p-wartość nie może być mniejsza niż 0.001.
+
+```{r}
+N = 999
+eunomia2 = eunomia
+logs = replicate(N, {
+ eunomia2$ICD10 = sample(eunomia2$ICD10)
+ logLik(lmer(BPRS.T2~NUM.HOSP + (1|CENTRE13) + (1|ICD10), data=eunomia2, REML=F))
+ })
+
+(sum(logs > logLik(modelFull))+1)/(N+1)
+```
+
+
+```{r, echo=FALSE, eval=FALSE}
+groupDisp(BPRS.T2~NUM.HOSP + (1|CENTRE13) + (1|ICD10), data=eunomia, var="CENTRE13")
+groupDisp(BPRS.T2~NUM.HOSP + (1|CENTRE13) + (1|ICD10), data=eunomia, var="ICD10")
+
+obsDisp(BPRS.T2~NUM.HOSP + (1|CENTRE13) + (1|ICD10), data=eunomia, which=1:20)
+
+tmp <- ranef(model1, postVar=TRUE)
+# qq-plot with intervals
+qqmath(tmp)$ICD10
+# variance-covariance matrix
+str(tmp)
+```
+
+
+# Praca domowa
+
+Mówiliśmy o złym zachowaniu oceny parametrów $\theta$ na brzegu przestrzeni parametrów. 
+Czy ten rozkład ma szansę być normalny?
+Sprawdźmy symulacyjnie.
+
+0. Ustal $\theta$
+1. Wylosuj dane, macierz Z i X. 
+2. Wylosuj $\varepsilon$ i $u$.
+3. Oceń $\theta$
+4. Powtórz kroki od 2 wiele razy (~10 000) i pokaż jak wygląda rozkład $\hat \theta$.
+5. Zrób to dla metody ML i REML
