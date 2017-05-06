@@ -1,0 +1,241 @@
+---
+title: "Projekt modele liniowe i mieszane"
+subtitle: "Zadanie III"
+author: "Aleksandra Dąbrowska, Jan Dmitruk, Magda Młynarczyk"
+date: "30 kwietnia 2017"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message=FALSE, warnings=FALSE)
+```
+
+```{r libraries, include=FALSE}
+library(dplyr)
+library(broom)
+library(knitr)
+```
+
+#Cel
+
+Celem trzeciego etapu projektu jest zbudowanie modelu opartego na cechach ucznia i zadania. 
+
+#Zmienne
+W poniższych analizach uwzględnimy model używany w I i II etapie, uzupełniając go o cechy konkretnego ucznia. Będą to:
+
+* `mies_ur` - miesiąc urodzenia ucznia
+
+* `plec` - płeć ucznia
+
+* `wyk_m` - wykształcenie matki
+
+* `wyk_o` - wykształcenie ojca
+
+* `stat_m` - status socjoekonomiczny matki (5 przedziałów od 0-100)
+
+* `stat_o` - status socjoekonomiczny ojca (5 przedziałów od 0-100)
+
+* `zawod_m` - zawód matki
+
+* `zawod_o` - zawód ojca
+
+* `gr_zawod_m` - grupa zawodowa matki (na podstawie kodu zawodu - pierwsze dwie cyfry)
+
+* `gr_zawod_o` - grupa zawodowa ojca
+
+Dane odnośnie ucznia zostały pobrane z `PUF_SPSS_COMBINED_CMB_STU_QQQ`, tak jak w etapie 1 wybraliśmy 5 krajów dla których tworzymy modele.
+
+#Modele
+
+Na początku przygotowywujemy dane do modelowania
+```{r}
+load("dane_rodzice_plec.rda")
+load("dane_pisa.rda")
+
+dane_nowe <- left_join(dane_rodzice_plec,dane_pisa, by="id_ucznia")
+dane_nowe$gr_zawod_m <- as.factor(dane_nowe$gr_zawod_m)
+dane_nowe$gr_zawod_o <- as.factor(dane_nowe$gr_zawod_o)
+
+dane_nowe$wyk_m <- as.factor(dane_nowe$wyk_m)
+dane_nowe$wyk_o <- as.factor(dane_nowe$wyk_o)
+
+rm(dane_pisa,dane_rodzice_plec)
+
+dane_nowe <- na.omit(dane_nowe)
+dane_nowe <- droplevels(dane_nowe)
+
+head(dane_nowe[,c(1:11)],4)
+```
+
+```{r include=FALSE}
+save(dane_nowe, file="dane_nowe.rda")
+```
+
+
+##Model + płeć i miesiąc urodzenia
+```{r}
+
+model_0 <- lm(czas_zadania~zadanie+id_kwestionariusza+plec+mies_ur,data=dane_nowe)
+anova(model_0)
+
+```
+
+Jak widzimy dodanie zmiennej `plec` i `mies_ur` ma istotny wpływ na zmienną `czas_zadania`.
+
+##Model + kraj 
+```{r}
+
+model_1 <- lm(log(czas_zadania)~zadanie*pozycja_zadania+id_kwestionariusza+plec+mies_ur+id_kraju, data = dane_nowe)
+anova(model_1)
+
+```
+
+Podobnie, istnieje wpływ kraju.
+
+##Model + wykształcenie rodziców
+```{r}
+
+model_2 <- lm(log(czas_zadania)~zadanie*pozycja_zadania+id_kwestionariusza+plec+mies_ur+id_kraju+wyk_m+wyk_o, data = dane_nowe)
+anova(model_2)
+
+```
+
+Także wykształcenie rodziców wpływa na czas rozwiązywania zadania przez dziecko.
+
+
+##Model + grupa zawodowa rodziców
+```{r}
+
+model_3 <- lm(log(czas_zadania)~zadanie*pozycja_zadania+id_kwestionariusza+plec+mies_ur+id_kraju+wyk_m+wyk_o+gr_zawod_m+gr_zawod_o, data = dane_nowe)
+anova(model_3)
+
+```
+
+Grupa zawodowa też ma wpływ.
+
+##Model + status materialny rodziców
+```{r}
+
+model_4 <- lm(log(czas_zadania)~zadanie*pozycja_zadania+id_kwestionariusza+plec+mies_ur+id_kraju+wyk_m+wyk_o+gr_zawod_m+gr_zawod_o+stat_m+stat_o, data = dane_nowe)
+anova(model_4)
+
+```
+
+Status materialny ma znaczenie, ale już mniejsze, jeśli rozważymy najpierw zawód rodziców, najwyraźniej status materialny jest mocno związany z wykonywanym zawodem.
+
+#Wybór modelu
+
+Kryteria, według których wybierzemy model to współczynniki `AIC` oraz `BIC`
+```{r, include=FALSE}
+glance_0 <- glance(model_0)
+glance_1 <- glance(model_1)
+glance_2 <- glance(model_2)
+glance_3 <- glance(model_3)
+glance_4 <- glance(model_4)
+
+
+glance_tab <- rbind(glance_0,glance_1,glance_2,glance_3,glance_4)
+
+rownames(glance_tab) <- c("model_0", "model_1", "model_2", "model_3", "model_4")
+
+```
+
+
+```{r}
+kable(glance_tab[,c(8,9)])
+```
+
+Najmniejsze parametry AIC i BIC dostajemy dla modelu 4, zatem do następnego etapu wybieramy model złożony ze zmiennych: `zadanie`*`pozycja_zadania`, `id_kwestionariusza`, `plec`, `mies_ur`, `id_kraju`, `wyk_m`, `wyk_o`, `gr_zawod_m`, `gr_zawod_o`, `stat_m` i `stat_o`.
+
+#Załącznik - obróbka danych
+```{r, error = TRUE, eval = FALSE}
+stud2015 <- read.spss("Cy6_ms_cmb_stu_qqq.sav", use.value.labels = TRUE, to.data.frame = TRUE)
+head(stud2015$CNT,3) -> x
+
+stud2015$CNT <- str_replace_all(stud2015$CNT,fixed(" "),"")
+
+kraje <- c("DEU","FIN","POL","TUR","USA")
+
+dane <- filter(stud2015,stud2015$CNT %in% kraje)
+
+kwestionariusz_kraje <- dane
+
+save(kwestionariusz_kraje,file="kwestionariusz_kraje.rda")
+load("kwestionariusz_kraje.rda")
+length(unique(kwestionariusz_kraje$CNTSTUID))
+
+#ktore kolumny odnosza sie do wyksztalcenia rodzicow?
+library(dplyr)
+#x <- kwestionariusz_kraje %>% select(contains("Father"))
+kody <- readxl::read_excel("Codebook_CMB.xlsx")
+kody <- kody[,c(1,2)]
+kody <- na.omit(kody)
+#korzystajac z powyzszych kodow chcemy wybrac zmienne zwiazane z wyksztalceniem rodzicow ucznia oraz ich zawodami
+
+#zmienne:
+#ST003D02T miesiac urodzenia
+#ST004D01T plec
+#MISCED - Mother’s Education (ISCED)
+#BMMJ1 (International Socioeconomic Index of Occupational Status
+#OCOD1 ISCO-08 Occupation code - Mother
+#FISCED
+#BFMJ2
+#OCOD2
+
+zmienne <- c("CNTSTUID","ST003D02T","ST004D01T","MISCED","BMMJ1","OCOD1","FISCED","BFMJ2","OCOD2")
+
+dane_kwestionariusze <- kwestionariusz_kraje[,which(colnames(kwestionariusz_kraje)%in% zmienne)]
+dane_kwestionariusze <- na.omit(dane_kwestionariusze)
+
+colnames(dane_kwestionariusze) <- c("id_ucznia","mies_ur","plec","wyk_m","wyk_o","stat_m","stat_o","zawod_m","zawod_o")
+
+dane_kwestionariusze$wyk_m <- gsub("ISCED","",dane_kwestionariusze$wyk_m)
+dane_kwestionariusze$wyk_o<- gsub("ISCED","",dane_kwestionariusze$wyk_o)
+
+######################
+#robimy przedzialy dla statusu
+library(Hmisc)
+dane_kwestionariusze$stat_m <- cut2(dane_kwestionariusze$stat_m,c(20,40,60,80))
+
+dane_kwestionariusze$stat_o <- cut2(dane_kwestionariusze$stat_o,c(20,40,60,80))
+
+########################
+
+#wczytujemy kody poszczególnych zawodów.
+kody_zawody <- readxl::read_excel("index08-draft.xlsx")
+kody_zawody <- kody_zawody[,c(1,3)]
+
+###############################
+#wczytujemy kody grup zawodow
+grupy_zawodow <- read.csv("occupations_groups.csv", sep=";",h=T)
+
+######
+#z danych z kwestionariusza wyciagniemy informacje o grupie zawodow w ktorych sa rodzice
+
+dane_kwestionariusze$gr_zawod_m <- substr(dane_kwestionariusze$zawod_m,1,2)
+dane_kwestionariusze$gr_zawod_o <- substr(dane_kwestionariusze$zawod_o,1,2)
+####
+#teraz do danych dorzucimy nazwe grupy
+colnames(grupy_zawodow)[1] <- "gr_zawod_m"
+grupy_zawodow$gr_zawod_m <- as.character(grupy_zawodow$gr_zawod_m)
+grupy_zawodow[1,1] <- "01"
+grupy_zawodow[2,1] <- "02"
+grupy_zawodow[3,1] <- "03"
+
+dane_kwestionariusze2 <- left_join(dane_kwestionariusze,grupy_zawodow, by="gr_zawod_m")
+dane_kwestionariusze2$Name <- droplevels(dane_kwestionariusze2$Name)
+colnames(dane_kwestionariusze2)[12] <- "n_zawod_m"
+
+
+colnames(grupy_zawodow)[1] <- "gr_zawod_o"
+dane_kwestionariusze2 <- left_join(dane_kwestionariusze2,grupy_zawodow, by="gr_zawod_o")
+dane_kwestionariusze2$Name <- droplevels(dane_kwestionariusze2$Name)
+
+
+colnames(dane_kwestionariusze2)[13] <- "n_zawod_o"
+dane_rodzice_plec <- dane_kwestionariusze2
+save(dane_rodzice_plec, file="dane_rodzice_plec.rda") 
+```
