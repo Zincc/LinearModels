@@ -1,0 +1,173 @@
+---
+title: "cw7"
+author: "Dawid Dąbkowski"
+date: "25.04.2017"
+output: html_document
+---
+
+```{r, warning=F, message=F}
+library(PBImisc)
+library(lattice)
+library(lme4)
+library(ggplot2)
+```
+
+Wczytamy dane dotyczące demencji.
+
+```{r}
+dane <- dementia
+head(dane)
+summary(dane)
+#levels(dane$study)
+```
+
+## Wstępna analiza
+
+Sprawdźmy najpierw model liniowy zależności demscore od wieku i płci.
+
+```{r}
+model1 <- lm(demscore ~ age * sex, data=dane)
+summary(model1)
+anova(model1)
+interaction.plot(dane$age, dane$sex, dane$demscore)
+```
+
+Widzimy, że zarówno płeć jak i wiek są istotne. Nie widzimy natomiast istotnych interakcji wiek:płeć. Dalej nie będziemy więc uwzględniać interakcji między tymi efektami.
+
+Zobaczmy jak wygląda model liniowy zależności demscore od placówki.
+
+```{r}
+model2 <- lm(demscore ~ study, data=dane)
+anova(model2)
+ggplot(dane, aes(x = reorder(study, demscore, FUN = mean), y=demscore)) + geom_boxplot() + coord_flip() + xlab("study")
+```
+
+Widać tu istotne różnice w średniej ze względu na placówkę.
+
+Placówkę możemy potraktować jako efekt mieszany. Stwórzmy odpowiedni model i zróbmy na nim testy ilorazu wiarogodności i test permutacyjny na istotność efektów (dla efektów stałych dodatkowo test Walda).
+
+## Istotność losowego efektu 'study'
+
+```{r}
+modelNoStudy <- lm(demscore ~ age + sex, data=dane)
+modelFull <- lmer(demscore ~ age + sex + (1|study), data=dane)
+
+anova(modelFull, modelNoStudy)
+#LogLik(modelFull), LogLik(modelNoStudy)
+```
+
+Z testu ilorazu wiarogodności widzimy, że efekt losowy study jest istotny.
+
+```{r}
+(sigma_m <- modelFull@theta)
+m <- 1000
+sigma_r <- c()
+
+for (i in 1:(m-1)){
+  dane$study2 <- sample(dane$study)
+  model_r <- lmer(demscore ~ age + sex + (1|study2), data=dane)
+  sigma_r[i] <- model_r@theta
+}
+sigma_r[m] <- sigma_m
+
+hist(sigma_r)
+mean(sigma_r >= sigma_m)
+```
+
+Potwierdza to również test permutacyjny. Otrzymaliśmy najmniejszą możliwą p-wartość (jedyna sigma z próbki, która nie jest mniejsza od prawdziwej sigmy to ona sama).
+
+## Test Walda istotności efektów losowych
+
+```{r}
+summary(modelFull)
+t.values <- summary(modelFull)$coefficients[,3]
+2*pnorm(abs(t.values[1]), lower.tail=F)
+2*pnorm(abs(t.values[2]), lower.tail=F)
+2*pnorm(abs(t.values[3]), lower.tail=F)
+```
+
+Test Walda wskazuje na istotność efektów age oraz sex.
+
+## Istotność stałego efektu 'age'
+
+```{r}
+modelNoAge <- lmer(demscore ~ sex + (1|study), data=dane)
+anova(modelFull, modelNoAge)
+#LogLik(model3a), LogLik(model3b)
+```
+
+Test ilorazu wiarogodności wskazuje na istotność efektu age.
+
+```{r}
+(sigma_m <- modelFull@theta)
+m <- 1000
+sigma_r <- c()
+
+for (i in 1:(m-1)){
+  dane$age2 <- sample(dane$age)
+  model_r <- lmer(demscore ~ age + sex + (1|study2), data=dane)
+  sigma_r[i] <- model_r@theta
+}
+sigma_r[m] <- sigma_m
+
+hist(sigma_r)
+mean(sigma_r >= sigma_m)
+```
+
+Ponownie test permutacyjny potwierdza istotność efektu age.
+
+## Istotność stałego efektu 'sex'
+
+```{r}
+modelNoSex <- lmer(demscore ~ age + (1|study), data=dane)
+anova(modelFull, modelNoAge)
+#LogLik(model3a), LogLik(model3b)
+```
+
+Test ilorazu wiarogodności wskazuje na istotność efektu sex.
+
+```{r}
+(sigma_m <- modelFull@theta)
+m <- 1000
+sigma_r <- c()
+
+for (i in 1:(m-1)){
+  dane$sex2 <- sample(dane$sex)
+  model_r <- lmer(demscore ~ age + sex + (1|study2), data=dane)
+  sigma_r[i] <- model_r@theta
+}
+sigma_r[m] <- sigma_m
+
+hist(sigma_r)
+mean(sigma_r >= sigma_m)
+```
+
+Ponownie test permutacyjny potwierdza istotność efektu sex.
+
+<!---
+```{r}
+# dane$age <- as.numeric(dane$age)
+# model4a <- lm(demscore ~ age + sex, data=dane)
+# model4b <- lmer(demscore ~  age + sex + (1|study) + (age-1|study), data=dane)
+# summary(model4b)
+# sigma_m <- model4@theta
+# anova(model4, model3)
+# #LogLik(model3), LogLik(model4)
+# 
+# summary(model4b)
+# 
+# ranef(model4b)
+
+# m <- 1000
+# sigma_r <- c()
+# for (i in 1:m){
+#   dane$study2 <- sample(dane$study)
+#   model_r <- lmer(demscore ~ (1|study2) + age + sex, data=dane)
+#   sigma_r[i] <- model_r@theta
+# }
+# hist(sigma_r)
+# mean(sigma_r < sigma_m)
+```
+Test ilorazu wiarogodnosci, test permutacyjny, test walda
+Istotnosc wieku i plci
+--->

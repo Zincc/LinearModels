@@ -1,0 +1,208 @@
+---
+title: "Praca domowa 6"
+author: "Aleksandra Dąbrowska"
+date: "4 April 2017"
+output: html_document
+---
+
+```{r, include=FALSE}
+library(MASS)
+library(lmtest)
+library(ggplot2)
+library(partykit)
+library(agricolae)
+library(e1071)
+```
+
+
+Pobierz plik `df.rda` i wykonaj na nim poniższe zadania https://github.com/pbiecek/LinearModels/blob/master/MIMUW_2017/Lab/df.rda
+```{r}
+load("df.rda")
+```
+
+1. Wykonaj analizę jednokierunkową wariancji ze zmienną `V1`. Ustaw poziom `B` jako poziom referencyjny.
+```{r}
+df$V1 <- relevel(df$V1, ref = "B")
+
+anova(lm(y~V1, data=df))
+
+```
+Zmienna `V1` jest istotnie objaśnia zmienną `y`.
+
+
+2. Połącz w zmiennych `V1` i `V2` poziomy `B` i `C` ze sobą, a następnie wykonaj test weryfikujący istotność interakcji.
+```{r}
+df$V1[df$V1=="C"] <- "B"
+df$V2[df$V2=="C"] <- "B"
+df$V1<-droplevels(df$V1)
+df$V2<-droplevels(df$V2)
+
+interaction.plot(df$V2,df$V1,df$y)
+model.interakcja<-lm(y~V1*V2,data=df)
+model.suma <- lm(y~V1+V2,data=df)
+
+anova(model.interakcja)
+anova(model.suma)
+
+anova(model.interakcja,model.suma)
+```
+
+Przeprowadzony test pokazuje, że nie ma interakcji między zmiennymi `V1` i `V2`.
+
+
+3. Dla zmiennej `V3` porównaj wyniki dla różnych kontrastów, przynajmniej Helmerta, poly i sum.
+```{r}
+summary(lm(y~V3, data=df, contrasts = contr.helmert(10)))
+ 
+summary(lm(y~V3,data=df, contrasts = contr.poly(10)))
+ 
+summary(lm(y~V3,data=df, contrasts = contr.sum(10)))
+
+summary(lm(y~V3,data=df, contrasts = contr.sdif(10)))
+
+summary(lm(y~V3,data=df, contrasts = contr.treatment(10)))
+
+
+```
+Wszytskie zastosowane kontrasty wskazują niewielką istotność poziomu `J` zmiennej `V3`
+
+4. Wykonaj test post hoc dla zmiennej `V3`. Które poziomy różnią się pomiędzy sobą?
+```{r}
+model <- aov(y~V3, data=df)
+HSD.test(model,"V3",console=TRUE)
+```
+
+Test HSD Tukey'a pokazuje, że nie ma istotnych różnic między poziomami.
+
+```{r}
+#tutaj pokazuje ze mamy roznice miedzy grupa "H","A" i "J"
+LSD.test(model,"V3",console=TRUE)
+```
+
+Test LSD pokazuje że istnieją różnice między grupami `H`, `A` i `J`.
+
+5. Zweryfikuj istotność zależności od zmiennej `V4`
+```{r}
+anova(lm(y~V4,data=df))
+```
+Zmienna `V4` w niewielkim stopniu (prawie na poziomie istotności) objaśnia zmienną `y`.
+
+6. Czy istotna jest interakcja pomiędzy V4 a V1? Jak pokazać tę zależność.
+```{r}
+load("df.rda")
+anova(lm(y~V4*V1,data=df))
+ggplot(df,aes(V4,y,color=V1))+stat_smooth(method=lm)+geom_point()
+
+```
+
+
+Nie mamy istotnej zależności między zmiennymi `V1` i `V4`.
+
+7. Zweryfikuj zależność od zmiennej `V5`. A co jeżeli ta zależność nie jest liniowa? Sprawdź zależność od wielomianu stopnia 3.
+```{r}
+anova(lm(y~V5, data=df))
+anova(lm(y~poly(V5,3),data=df))
+summary(lm(y~poly(V5,3),data=df))
+summary(lm(y~poly(V5,2),data=df))
+
+```
+
+Dla zmiennej V5 wystarczy wziąć już wielomian drugiego stopnia. Przy takim przekształceniu zmienna `poly(V5,3)` w istotnym stopniu objaśnia `y`.
+
+
+8. Zbuduj nową zmienną `NV := V4 - 2*V5`. Zbadaj związek z tą zmienną.
+```{r}
+df$NV <- df$V4-2*df$V5
+anova(lm(y~NV,data=df))
+```
+
+Nowa zmienna `NV` nie ma istotnego wpływu na objaśnianie `y`.
+
+9. Wybierz model optymalny według kryterium BIC - zrób przegląd pełny wszystkich modeli.
+```{r}
+zmienne <- c("V1","V2","V3","V4","V5","poly(V5,2)","V6","V7","V8","V9","V10")
+
+wspolczynniki <- (bincombinations(length(zmienne))==1)[-1,]
+parametry <- matrix(0,nrow(wspolczynniki),3)
+for (i in 1:nrow(wspolczynniki)) {
+     form <- as.formula(paste("y~(", paste(zmienne[wspolczynniki[i,]], collapse="+"),")^2"))
+     model <- lm(form, data=df)
+     parametry[i,1] <- AIC(model, k=log(nrow(df)))
+     parametry[i,2] <- model$rank
+     parametry[i,3] <- AIC(model)
+ }
+
+as.formula(paste("y~",paste(zmienne[wspolczynniki[which.min(parametry[,1]),]], collapse="+")))
+
+```
+
+
+10. Wybierz model optymalny według kryterium AIC - użyj funkcji step.
+```{r}
+step.aic <- stepAIC(lm(y~.+poly(V5,2),data=df),direction = "backward")
+```
+
+11. Wykonaj diagnostykę reszt. Czy są obserwacje odstające/wpływowe?
+```{r}
+model <- lm(y ~ V1 + V4 + V8+ poly(V5, 2),data=df)
+summary(model)
+```
+
+W końcowym modelu będziemy rozważać zmienne `V1`, `V4` i `poly(V5,2)`.
+```{r}
+
+model <- lm(y ~ V1 + V4 + poly(V5, 2),data=df)
+
+summary(model)
+
+plot(model,which=1:6)
+```
+
+
+Dla wybranego modelu wykonujemy testy diagnostyczne.
+
+```{r}
+bptest(model)
+```
+
+Nie ma podstaw do odrzucenia hipotezy o jednorodności wariancji reszt w modelu.
+
+```{r}
+dwtest(model)
+bgtest(model)
+```
+
+Nie ma autokorelacji rzędu 1 między resztami, co sugeruje ich niezależność.
+
+
+```{r}
+shapiro.test(model$residuals)
+```
+
+Nie odrzucamy hipotezy o normalnym rozkładzie reszt.Jednak niewielka p-wartość sugeruje, że mogą występować odstępstwa od tego rozkładu.
+
+
+```{r}
+raintest(model)
+resettest(model)
+
+```
+
+12. Zweryfikuj istotność interakcji `V6` i `V7`.
+```{r}
+anova(lm(y~V6*V7, data=df))
+```
+
+Nie ma interakcji między zmiennymi `V6` i `V7`.
+
+13. Porównaj wyniki z wynikami funkcji `ctree` pakiet `partykit`.
+```{r}
+model_ctree <- ctree(y ~ V4+V1 + poly(V5,2),data=df)
+
+model_ctree
+
+plot(model_ctree)
+```
+
+Wynik funkcji `ctree` sugeruje, że jedyną istotną zmienną w tym modelu jest zmienna `V1` której poziomy zostały podzielone na dwie grupy `A` i `C` oraz `B`.
+

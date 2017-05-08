@@ -1,0 +1,107 @@
+---
+title: "Praca domowa 5"
+author: "Aleksandra Dąbrowska"
+date: "31 March 2017"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+---
+
+#Problem
+Z pakietu `PogromcyDanych` wybierz ze zbioru `auta012` auta jednej marki. Zbuduj model statystyczny opisujący średnią cenę aut tej marki.
+
+Uwzględnij przynajmniej 4 sensowe cechy i uzasadnij, że wybrany model jest dobry.
+
+
+#Dane
+Zajmuję się danymi `auta2012` z pakietu `PogromcyDanych`. 
+
+```{r,message=F,warning=F}
+library(dplyr)
+library(PogromcyDanych)
+library(lattice)
+library(e1071)
+library(easyGgplot2)
+library(ggplot2)
+```
+
+```{r dane}
+auta <- PogromcyDanych::auta2012 
+auta$Rok.produkcji <- as.factor(auta$Rok.produkcji)
+
+auta <-  filter(auta, Marka=="Audi")
+auta <- auta[,c(3,4,5,6,7,8,10,11:15,19)]
+
+auta <- auta[which(auta$Liczba.drzwi!=""),]
+auta <- auta[which(auta$Rodzaj.paliwa!=""),]
+auta <- auta[which(auta$Skrzynia.biegow!=""),]
+auta <- auta[which(auta$Kolor!=""),]
+auta <- auta[which(auta$Brutto.netto=="brutto"),]
+
+auta <- na.omit(auta)
+
+auta <- droplevels(auta)
+
+head(auta, 5)
+
+```
+
+W modelach chcemy rozpatrywać, oprócz oryginalnych zmiennych także interakcje między zmiennymi.
+```{r}
+zmienne <- c("KM","kW","Model","Liczba.drzwi","Pojemnosc.skokowa","Przebieg.w.km","Rodzaj.paliwa","Rok.produkcji","Kolor","Skrzynia.biegow", "Skrzynia.biegow:Rodzaj.paliwa")
+```
+
+Z racji tego, że zmiennych nie jest bardzo dużo, będziemy rozpatrywać wszystkie możliwe kombinacje zmiennych. (2047)
+
+```{r}
+wspolczynniki <- (bincombinations(length(zmienne))==1)[-1,]
+parametry <- matrix(0,nrow(wspolczynniki),3)
+for (i in 1:nrow(wspolczynniki)) {
+     form <- as.formula(paste("Cena.w.PLN~", paste(zmienne[wspolczynniki[i,]], collapse="+")))
+     model <- lm(form, data=auta)
+     parametry[i,1] <- AIC(model, k=log(nrow(auta)))
+     parametry[i,2] <- model$rank
+     parametry[i,3] <- AIC(model)
+ }
+
+head(parametry)
+```
+
+Poniżej przedstawiam wartości `BIC` i `AIC` dla wszystkich kombinacji wybranych zmiennych.
+```{r}
+
+parametry <- as.data.frame(parametry)
+colnames(parametry) <- c("BIC", "rank", "AIC")
+aic_plot <-ggplot(parametry, aes(rank, AIC)) +
+  geom_point(size=1) +
+  geom_point(data=parametry[which.min(parametry$AIC),], color="blue", size=2)
+
+bic_plot<- ggplot(parametry, aes(rank, BIC)) +
+  geom_point(size=1) +
+  geom_point(data=parametry[which.min(parametry$BIC),], color="blue", size=2)
+
+ggplot2.multiplot(aic_plot, bic_plot, cols=2)
+
+```
+
+Sprawdzamy które kombinacje zmiennych dają nam najmniejsze wartości `AIC` i `BIC`.
+```{r}
+
+as.formula(paste("Cena.w.PLN~",paste(zmienne[wspolczynniki[which.min(parametry[,3]),]], collapse="+")))
+
+as.formula(paste("Cena.w.PLN~",paste(zmienne[wspolczynniki[which.min(parametry[,1]),]], collapse="+")))
+
+```
+
+Zarówno kryterium `AIC` i `BIC` pokazuje, że najlepszym modelem będzie ten oparty na zmiennych: `KM`, `kW`, `Model`,`Liczba.drzwi`, `Pojemnosc.skokowa`, `Przebieg.w.km`, `Rodzaj.paliwa`,`Rok.produkcji`,`Skrzynia.biegow` i przeciętych zmiennych `Skrzynia.biegow` i `Rodzaj.paliwa`.
+
+
+```{r}
+anova(lm(Cena.w.PLN ~ KM + kW + Model + Liczba.drzwi + Pojemnosc.skokowa + 
+    Przebieg.w.km + Rodzaj.paliwa + Rok.produkcji + Skrzynia.biegow + 
+    Skrzynia.biegow:Rodzaj.paliwa,data=auta))
+
+```
+
+Jak widać wszyskie zmienne w tym modelu wydają się być istotne.

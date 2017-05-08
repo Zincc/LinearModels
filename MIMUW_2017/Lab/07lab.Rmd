@@ -1,0 +1,25 @@
+---
+title: "Wybór modelu"
+author: "Przemyslaw Biecek"
+---
+
+# Plan na spotkanie
+
+Pobierz plik `df.rda` i wykonaj na nim poniższe zadania https://github.com/pbiecek/LinearModels/blob/master/MIMUW_2017/Lab/df.rda
+
+1. Wykonaj analizę jednokierunkową wariancji ze zmienną `V1`. Ustaw poziom `B` jako poziom referencyjny.
+2. Połącz w zmiennych `V1` i `V2` poziomy `B` i `C` ze sobą, a następnie wykonaj test weryfikujący istotność interakcji.
+3. Dla zmiennej `V1` porównaj wyniki dla różnych kontrastów, przynajmniej Helmerta, poly i sum.
+4. Wykonaj test post hoc dla zmiennej `V3`. Które poziomy różnią się pomiędzy sobą?
+5. Zweryfikuj istotność zależności od zmiennej `V4`
+6. Czy istotna jest interakcja pomiędzy V4 a V1? Jak pokazać tę zależność.
+7. Zweryfikuj zależność od zmiennej `V5`. A co jeżeli ta zależność nie jest liniowa? Sprawdź zależność od wielomianu stopnia 3.
+8. Zbuduj nową zmienną `NV := V4 - 2*V5`. Zbadaj związek z tą zmienną.
+9. Wybierz model optymalny według kryterium BIC - zrób przegląd pełny wszystkich modeli.
+10. Wybierz model optymalny według kryterium AIC - użyj funkcji step. 
+11. Wykonaj diagnostykę reszt. Czy są obserwacje odstające/wpływowe?
+12. Zweryfikuj istotność interakcji `V6` i `V7`.
+13. Porównaj wyniki z wynikami funkcji `ctree` pakiet `partykit`.
+14. Użyj funkcji `optim()` aby znaleźć oceny współczynników z kryterium do optymalizacji `abs(y - Xb)`
+15. Funkcja `rlm` z pakietu `MASS` wykonuje regresję odporną. Sprawdź jak wpłynie ona na ocenę współczynników.
+

@@ -1,0 +1,259 @@
+---
+title: "Projekt modele liniowe i mieszane"
+subtitle: "Zadanie I"
+author: "Aleksandra Dąbrowska, Jan Dmitruk, Magda Młynarczyk"
+date: "20 March 2017"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+---
+```{r "setup", include=FALSE}
+#setwd("C:/Users/Magda/Documents/GitHub/Projekt-Pisa2015")
+setwd("C:/Users/O/Desktop/Moje dokumenty/GitHub/Projekt-Pisa2015")
+```
+
+#Problem
+W pierwszej fazie projektu chcemy znaleźć model liniowy opisujący zależność długości rozwiązywania zadań z matematyki i parametrów zadań. Dla wybranego modelu przeprowadzimy diagnostykę i wizualizację.
+
+
+#Obróbka danych
+Pierwszym krokiem w naszej analizie była transformacja danych `actionTimeScoreMath`.
+
+```{r biblioteki, message=FALSE,warnings=FALSE}
+library(dplyr)
+library(MASS)
+library(knitr)
+library(lmtest)
+library(car)
+library(stringr)
+library(broom)
+library(ggplot2)
+
+```
+
+Czas podpunktu został zamieniony na sekundy,dodaliśmy kolumny z numerem zadania i podpunktu, wartości `NA` w kolumnie S zmieniliśmy na wartość `No answer`. Z kolumny position usunęliśmy wartości `-1`. Z kolumny `BOOKID` usunęliśmy elementy z wartością `rm`. Obcieliśmy także1 procent najwiekszych i najmniejszych czasów.
+```{r dane, eval=FALSE, include=FALSE}
+
+#setwd(dirname(rstudioapi::getActiveDocumentContext()$path)
+
+load("dane_matematyka.rda")
+
+dane_matematyka$czas <- dane_matematyka$T/1000
+dane_matematyka <- dane_matematyka[,-9]
+dane_matematyka$zadanie <- substr(dane_matematyka$item_short,2,4)
+dane_matematyka$podpunkt<-as.numeric(substr(dane_matematyka$item_short,6,7))
+
+dane_matematyka$S <- as.character(dane_matematyka$S)
+dane_matematyka$S[is.na(dane_matematyka$S)] <- "No answer"
+dane_matematyka$S <- as.factor(dane_matematyka$S)
+
+dane <- dane_matematyka[which(dane_matematyka$position!=-1),]
+
+dane2 <- dane[!is.na(dane$czas),]
+#wyrzucamy jeden procet najwyzszych i najnizszych czasow
+dane3 <- filter(dane2, dane2$czas < quantile(dane2$czas,probs=0.99))
+dane4 <-  filter(dane3, dane3$czas > quantile(dane2$czas,probs=0.01))
+x <- is.na(dane4$A)
+sum(x)
+
+dane5 <- dane4[!is.na(dane4$A),]
+
+dt <-dane5
+
+dane6 <- dane5
+
+dane6 <- dane6 %>% group_by(CNTSTUID,zadanie) %>% summarize(sum(czas))
+
+dt3 <- left_join(dt, dane6, by=c("CNTSTUID","zadanie"))
+
+dane7 <- dt3 %>% group_by(CNTSTUID,zadanie) %>% summarize(sum(A))
+dt4 <- left_join(dt3,dane7, by=c("CNTSTUID","zadanie"))
+
+
+sumujPodpunkty <- dane_matematyka[, c("zadanie", "podpunkt")]
+sumujPodpunkty <- unique(sumujPodpunkty)
+x <- sumujPodpunkty %>% group_by(zadanie)%>%summarize(length(podpunkt))
+sumujPodpunkty2 <- left_join(sumujPodpunkty,x, by="zadanie")
+sumujPodpunkty2 <- sumujPodpunkty2[,-2]
+sumujPodpunkty2 <- unique(sumujPodpunkty2)
+
+dt5 <- left_join(dt4,sumujPodpunkty2,by="zadanie")
+
+#------------------
+x <- ifelse(dt5$S=="Full credit",1/dt5$`length(podpunkt)`,0)
+dt6 <- cbind(dt5,x)
+
+dane8 <- dt6 %>% group_by(CNTSTUID,zadanie) %>% summarize(sum(x))
+
+dt7 <- left_join(dt6,dane8, by=c("CNTSTUID","zadanie"))
+
+rm(dane_matematyka)
+rm(dt3,dt4)
+rm(dane,dane2,dane3,dane4,dane5,dane6,dane7,dane8)
+rm(dt,dt5,dt6)
+rm(sumujPodpunkty,sumujPodpunkty2,x)
+
+dane_pelne <- dt7
+
+dane_matematyka <- dane_pelne
+rm(dane_matematyka)
+```
+
+W nowych danych mamy następujące kolumny:
+
+* `id_kraju` kod kraju
+
+* `id_szkoły` kod szkoły
+
+* `id_ucznia` kod ucznia
+
+* `id_kwestionariusza` kod kwestionariusza
+ 
+* `kod_zadania` pełny kod zadania (`item_short` w pierwotnych danych)
+
+* `typ_zadania` czy zadanie było matematyczne
+
+* `liczba_akcji` liczba akcji którą wykonał uczeń
+
+* `wynik` z jakim skutkiem zostało rozwiązane zadanie
+
+* `pozycja_zadania` w której części całego kwestionariusza znajdowało się zadanie
+
+* `czas` czas rozwiązywania pojedynczego podpunktu
+
+* `zadanie` numer zadania
+
+* `podpunkt` numer podpunktu
+
+* `czas_zadania` czas rozwiązywania całego zadania
+
+* `suma_akcji` ile akcji uczeń potrzebował na całe zadanie
+
+* `liczba_podpunktow` ile podpunktów miało zadanie
+
+* `wynik_podpunktu` jeśli podpunkt rozwiązany to 1 w przeciwnym przypadku 0
+
+* `wynik_zadania` suma wyników podpunktów z poszczególnych zadań
+  
+```{r}
+#setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+
+load("dane_matematyka2.rda")
+
+x <-c("id_kraju","id_szkoły","id_ucznia","id_kwestionariusza","kod_zadania","typ_zadania","liczba_akcji","wynik","pozycja_zadania","czas","zadanie","podpunkt","czas_zadania","suma_akcji","liczba_podpunktow","wynik_podpunktu","wynik_zadania")
+
+colnames(dane_pelne) <- x
+dane_pelne <- droplevels(dane_pelne)
+dane_pelne$id_kraju<- str_replace_all(dane_pelne$id_kraju, fixed(" "), "")
+```
+
+##Wybór danych
+W naszych danych mamy informacje z 73 krajów. Jednak do tworzenia analiz wybraliśmy 5.
+
+```{r kraje}
+kraje <- c("DEU","FIN","POL","TUR","USA")
+
+dane_pelne$id_kraju <- as.character(dane_pelne$id_kraju)
+
+wybranekraje <- dane_pelne$id_kraju %in% kraje
+
+data <- dane_pelne[wybranekraje,]
+
+data$podpunkt <- as.factor(data$podpunkt)
+dane <- data
+
+rm(dane_pelne,wybranekraje, kraje,x,data)
+
+
+head(dane,4)
+```
+
+#Modele
+
+## Model czas podpunktu
+
+W pierwszych modelach chcemy objaśniać zmienną `czas`. W naszych danych jest to liczba mówiąca jak długo uczeń rozwiązuje konkretny podpunkt zadania.
+
+```{r wybor modelu czas podpunktu}
+model_podpunkt_1 <- lm(czas~kod_zadania,data=dane)
+
+model_podpunkt_2 <- lm(czas~kod_zadania+id_kwestionariusza+pozycja_zadania, data = dane)
+
+model_podpunkt_3 <- lm(czas~zadanie/podpunkt+id_kwestionariusza+pozycja_zadania, data = dane)
+```
+
+```{r istotnosc zmiennych czas podpunktu}
+anova(model_podpunkt_1)
+anova(model_podpunkt_2)
+anova(model_podpunkt_3)
+```
+
+We wszytskich powyższych modelach wybrane zmienne okazują się istotne.
+
+##Model czas zadania
+
+Następną zmienną objaśnianą jest czas całego zadania, czyli zsumowane czasy podpunktów.
+
+```{r wybor modelu czas zadania}
+
+dane_model <- dane[,c(4,9,11,13,15)]
+dane_model <- unique(dane_model)
+dane_model$zadanie <- factor(dane_model$zadanie)
+
+model_zadanie_1 <- lm(czas_zadania~id_kwestionariusza+zadanie, data=dane_model)
+
+model_zadanie_2 <- lm(czas_zadania~zadanie+id_kwestionariusza+pozycja_zadania, data = dane_model)
+
+model_zadanie_3 <- lm(czas_zadania~zadanie*pozycja_zadania+id_kwestionariusza, data = dane_model)
+
+```
+
+```{r istotnosc zmiennych czas zadania}
+anova(model_zadanie_1)
+anova(model_zadanie_2)
+anova(model_zadanie_3)
+```
+
+W przypadku objaśniania zmiennej `czas_zadania` także wszystkie zmienne okazują się istotne, jednak zagnieżdżenie podpunktu w zadaniu nie jest tak istotnie jak w objaśnianiu zmiennej `czas`.
+
+##Podsumowanie modeli
+
+Ze wszytskich modeli "wyciągniemy" informacje na temat statystyk
+```{r tabela statystyk}
+glance_pod_1 <-glance(model_podpunkt_1)
+glance_pod_2 <-glance(model_podpunkt_2)
+glance_pod_3 <-glance(model_podpunkt_3)
+glance_zad_1 <-glance(model_zadanie_1)
+glance_zad_2 <-glance(model_zadanie_2)
+glance_zad_3 <-glance(model_zadanie_3)
+
+glance_tab <- rbind(glance_pod_1,glance_pod_2,glance_pod_3,glance_zad_1,glance_zad_2,glance_zad_3)
+
+kable(glance_tab)
+
+
+```
+
+Patrząc na współczynnik AIC dla wszytskich modeli dla objaśniania czasu wybralibyśmy `model_podpunkt_3`, a dla czasu całego zadania `model_zadanie_3`.
+
+Zastosujemy jeszcze transformacje zmiennej objaśnianej.
+
+```{r transformacje modelu}
+
+wsp <- boxcox(model_zadanie_3)
+
+wsp <- wsp$x[which.max(wsp$y)]
+
+model_zadanie_3_box <- lm((czas_zadania)^wsp~zadanie*pozycja_zadania+id_kwestionariusza, data = dane_model)
+glance(model_zadanie_3_box)
+
+model_zadanie_3_log <- lm(log(czas_zadania)~zadanie*pozycja_zadania+id_kwestionariusza, data = dane_model)
+glance(model_zadanie_3_log)
+
+
+model_zadanie_3 <- model_zadanie_3_log
+```
+
+
+Wybieramy model_zadanie_3 zależny od zmiennych `zadanie` przeciętej z nią `pozycja_zadania` i `id_kwestionariusza`. Na zmiennej `czas` użyliśmy transformacji logarytmicznej.
