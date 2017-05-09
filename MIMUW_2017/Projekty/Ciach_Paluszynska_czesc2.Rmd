@@ -1,0 +1,857 @@
+---
+title: 'Część 2: Model zbudowany na cechach zadania i ucznia'
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warnings=FALSE, message = FALSE)
+```
+
+```{r libraries, echo=FALSE}
+library(ggplot2)
+library(stringr)
+library(foreign)
+library(MASS)
+library(readr)
+library(data.table)
+library(rworldmap)
+library(nortest)
+library(moments)
+library(car)
+library(agricolae)
+library(VennDiagram)
+library(gridExtra)
+```
+
+# Krótki opis modelu
+
+  Zbadaliśmy czas rozwiązywania zadań z matematyki w zależności od wybranych cech zadania oraz ucznia. Do analizy wybraliśmy następujące zmienne: Numer zadania, numer kwestionariusza, płeć, rok urodzenia oraz kraj pochodzenia. Postanowiliśmy traktować efekty zadania i kwestionariusza jako addytywne, ponieważ z macierzy kontyngencji wynika że zadania nie są zagnieżdżone w kwestionariuszach. Nie uwzględniliśmy poszczególnych szkół w modelu ze względu na zbyt dużą liczbę poziomów (model uwzględniający szkoły wymagał alokacji 50 Gb pamięci). Zmienność szkół w obrębie krajów spróbujemy porównać w następnych częściach.
+  
+  Żeby ograniczyć rozmiar danych, zdecydowaliśmy się na wybranie co czwartej szkoły z każdego kraju. Ponieważ najmniejsza liczba szkół w kraju to 44 (Luksemburg), takie podejście powinno dać wystarczająco dużo informacji żeby poprawnie odwzorować strukturę danych. Zachowanie struktury potwierdzają stosunki liczb rozwiązań zadań w populacji i próbce, które we wszystkich przypadkach są bardzo bliskie 4. Zbadaliśmy również zachowanie struktury krajów, gdzie dostaliśmy równie dobre wyniki. Procedura otrzymania zbioru danych została opisana pod koniec raportu, w sekcjach 7 i 8. 
+ 
+  Zauważyliśmy że mniej gęste wypróbkowanie nie zachowuje struktury szkół w niektórych krajach, na przykład w Luksemburgu. Jest to spowodowane wysoką wariancją liczb uczniów w szkołach i małą liczbą szkół w tych krajach.
+  
+  Zbadaliśmy dwie transformacje czasu rozwiązań: transformację Boxa-Coxa oraz transformację Log-Trans. Transformacje dały stosunkowo podobne wyniki. Po analizie normalności reszt w modelach zbudowanych w oparciu o obie tansformacje wybraliśmy transformację Log-Trans.
+  
+  Diagnostyka modelu przebiegła pomyślnie. Reszty w modelu są skupione wokół jednej wartości, brak obserwacji odstających. Rozkład reszt standardyzowanych jest symetryczny, choć nie jest normalny ze względu na zbyt wysoką kurtozę. Wariancja reszt jest stosunkowo jednorodna. Wobec tego przyjmujemy że nasz model jest poprawny. 
+ 
+  
+
+# 1. Streszczenie wyników analizy
+
+Nasz model zbudowaliśmy w oparciu o następujące zmienne, wybrane za pomocą kryterium BIC: 
+
+* "BOOKID", numer kwestionariusza
+* "task", numer zadania
+* "CNT", kraj 
+* "gender", płeć ucznia
+* "WEALTH", wskaźnik zamożności rodziny (zmienna numeryczna)
+* "HEDRES", wskaźnik zasobów edukacyjnych w domu (zmienna numeryczna)
+* "MISCED", wykształcenie matki (klasyfikacja ISCED)
+* "FISCED", wykształcenie ojca (klasyfikacja ISCED)
+* "IMMIG", status imigranta
+      + "-1": Brak odpowiedzi
+      + "1": Natywny
+      + "2": Pierwsze pokolenie
+      + "3": Drugie pokolenie
+* "ST012Q09NA", liczba instrumentów muzycznych w domu
+      + "-1": Brak odpowiedzi
+      + "1": Brak
+      + "2": Jeden
+      + "3": Dwa
+      + "4": Trzy lub więcej
+* "ST013Q01TA", liczba książek w domu
+      + "-1": Brak odpowiedzi
+      + "1": 0-10
+      + "2": 11-25
+      + "3": 26-100
+      + "4": 101-200
+      + "5": 201-500
+      + "6": Ponad 500
+* "ST123Q04NA", "moi rodzice zachęcają mnie do bycia pewnym siebie"
+      + "-1": Brak odpowiedzi
+      + "1": Bardzo się nie zgadzam 
+      + "2": Nie zgadzam się
+      + "3": Zgadzam się
+      + "4": Bardzo się zgadzam
+* "ST119Q04NA", "uważam się za osobę ambitną"
+      + "-1": Brak odpowiedzi
+      + "1": Bardzo się nie zgadzam 
+      + "2": Nie zgadzam się
+      + "3": Zgadzam się
+      + "4": Bardzo się zgadzam
+* "ST062Q03TA", jak często uczeń spóźniał się do szkoły w przeciągu ostatnich dwóch tygodni
+      + "-1": Brak odpowiedzi
+      + "1": W ogóle
+      + "2": Raz lub dwa razy
+      + "3": Trzy lub cztery razy
+      + "4": Pięć razy lub więcej.
+  
+  Spośród wybranych zmiennych największe znaczenie dla wyjaśnienia zmienności czasu rozwiązywania miały zasoby edukacyjne w domu, numer zadania oraz płeć. Niestety, wyjaśniają one zmienność jedynie w niewielkim stopniu. Ponadto wyestymowane współczynniki dla tych zmiennych są bardzo niewielkie.  
+
+  W szczegółowej analizie zmiennych skupiliśmy się na kraju, płci oraz wykształceniu rodziców. Ta ostatnia zmienna miała szczególnie interesującą zależność. Najlepszy czas rozwiązywania zadań osiągnęli uczniowie, którzy nie udzielili odpowiedzi na wykształcenie dowolnego rodzica (co sugeruje brak co najmniej jednego rodzica). W porównaniu z wykształceniem podstawowym, lepsze wykształcenie matki również miało pozytywny wpływ na czas rozwiązywania zadań. Zaskakujące okazało się to, że wykształcenie ojca wydłużało czas rozwiązywania zadań, tym bardziej im lepiej wykształcony był ojciec. 
+  
+  Różnice pomiędzy płciami były nieznaczne w porównaniu ze zmiennością populacyjną.
+  
+  Po uwzględnieniu róznic w poziomie zamożności rodzin, spodziewamy się że za różnice pomiędzy krajami będą odpowiadać przede wszystkim róznice w systemie edukacji. Spośród 55 badanych krajów, 34 mają lepsze czasy rozwiązywania niż Polska. Kraje o podobnych czasach rozwiązywania (tzn. braku zauważalnych statystycznie różnic w teście LSD) to głównie kraje środkowo lub "brzegowo"-europejskie, takie jak Grecja, Łotwa, Słowacja, oraz kraje egzotyczne, takie jak Kostaryka, Chile. Wyjątkiem od tej reguły jest Belgia oraz Szwecja. 
+  
+  Wyniki analizy zilustrowaliśmy graficznie za pomocą odpowiednich wykresów w sekcji 6 ("wizualizacja").
+
+# 2. Struktura danych i wybór podpopulacji
+
+Ponieważ wyjściowe dane zawierały obserwacje nietypowe, stworzyliśmy na ich podstawie własny zestaw danych. Szczegółowy opis procedury otrzymania zestawu danych znajduje się w sekcji 7.  
+
+```{r, cache=TRUE}
+# fread jest o wiele szybsze niż inne funkcje, więc warto zapisać dane po obrobieniu i ładować z pliku przy następnych analizach
+pelne.dane <- fread("Curated_full_data.csv", sep=",", header=TRUE, stringsAsFactors = TRUE)
+head(pelne.dane)
+```
+
+
+```{r, include=FALSE}
+# Ewentualnie konwersja do faktorow na wszelki wypadek
+# pelne.dane$CNT <- factor(pelne.dane$CNT)
+# pelne.dane$item_short <- factor(pelne.dane$item_short)
+# pelne.dane$CNTSCHID <- factor(pelne.dane$CNTSCHID)
+# pelne.dane$CNTSTUID <- factor(pelne.dane$CNTSTUID)
+# pelne.dane$gender <- factor(pelne.dane$gender)
+# pelne.dane$BOOKID <- factor(pelne.dane$BOOKID)
+# pelne.dane$position <- factor(pelne.dane$position)
+# pelne.dane$task <- factor(pelne.dane$task)
+# pelne.dane$Q <- factor(pelne.dane$Q)
+# pelne.dane$Q.nb <- factor(pelne.dane$Q.nb)
+# pelne.dane$MISCED <- factor(pelne.dane$MISCED)
+# pelne.dane$FISCED <- factor(pelne.dane$FISCED)
+# pelne.dane$IMMIG <- factor(pelne.dane$IMMIG)
+# pelne.dane$ST012Q09NA <- factor(pelne.dane$ST012Q09NA)
+# pelne.dane$ST013Q01TA <- factor(pelne.dane$ST013Q01TA)
+# pelne.dane$LANGTEST_QQQ <- factor(pelne.dane$LANGTEST_QQQ)
+# pelne.dane$ST012Q06NA <- factor(pelne.dane$ST012Q06NA)
+# pelne.dane$ST123Q04NA <- factor(pelne.dane$ST123Q04NA)
+# pelne.dane$ST011Q02TA <- factor(pelne.dane$ST011Q02TA)
+# pelne.dane$ST119Q04NA <- factor(pelne.dane$ST119Q04NA)
+# pelne.dane$ST034Q01TA <- factor(pelne.dane$ST034Q01TA)
+# pelne.dane$ST034Q02TA <- factor(pelne.dane$ST034Q02TA)
+# pelne.dane$ST062Q03TA <- factor(pelne.dane$ST062Q03TA)
+```
+
+
+Żeby ograniczyć rozmiar danych, z każdego kraju została losowo wybrana jedna czwarta szkół. Porcedura wyboru szkół została szczegółowo opisana w sekcji 8. 
+
+Ładowanie listy wybranych szkół:
+
+```{r}
+wybrane.szkoly <- fread("Chosen_schools.csv", sep=",", header=TRUE, stringsAsFactors = TRUE)
+wybrane.szkoly <- factor(unlist(wybrane.szkoly))
+```
+
+Wybieramy próbkę na podstawie wybranych szkół
+
+```{r}
+probka <- pelne.dane[pelne.dane$CNTSCHID %in% wybrane.szkoly, ]
+probka$CNTSCHID = factor(probka$CNTSCHID, levels=unique(probka$CNTSCHID))
+probka$CNTSTUID = factor(probka$CNTSTUID, levels=unique(probka$CNTSTUID))
+probka$BOOKID = factor(probka$BOOKID)
+head(probka)
+```
+
+Usuwamy pełne dane żeby oszczędzić miejsce w pamięci.
+
+```{r}
+rm(pelne.dane)
+gc()
+```
+
+# 3. Transformacja danych
+
+W pierwszym kroku ustalamy referencyjne poziomy zmiennych kategorycznych.
+
+```{r}
+probka$CNT <- relevel(probka$CNT, ref="POL")
+probka$MISCED <- relevel(probka$MISCED, ref="0")
+probka$FISCED <- relevel(probka$FISCED, ref="0")
+probka$IMMIG <- relevel(probka$IMMIG, ref="1")
+probka$ST012Q09NA <- relevel(probka$ST012Q09NA, ref="1")
+probka$ST013Q01TA <- relevel(probka$ST013Q01TA, ref="1")
+probka$ST012Q06NA <- relevel(probka$ST012Q06NA, ref="1")
+probka$ST123Q04NA <- relevel(probka$ST123Q04NA, ref="1")
+probka$ST011Q02TA <- relevel(probka$ST011Q02TA, ref="1")
+probka$ST119Q04NA <- relevel(probka$ST119Q04NA, ref="1")
+probka$ST062Q03TA <- relevel(probka$ST062Q03TA, ref="1")
+```
+
+Rozpatrujemy transformację czasu żeby otrzymać rozkład zbliżony do normalnego. 
+
+```{r, cache=TRUE}
+# Brakuje pamieci na uwzględnienie szkoly oraz na zagnieżdżenie języka testu w kraju.
+bc.model <- aov(time ~ BOOKID + task + CNT + gender + WEALTH + CULTPOSS + HEDRES +  MISCED + FISCED + IMMIG + AGE + ST012Q09NA + ST013Q01TA + LANGTEST_QQQ + ST012Q06NA + ST123Q04NA + ST011Q02TA + ST119Q04NA + ST062Q03TA, data=probka)
+summary(bc.model)
+```
+
+W pierwszej kolejności aby zmniejszyć model usuniemy niektóre zmienne o bardzo niskiej wartości statystyki F: `ST011Q02TA`, `LANGTEST_QQQ`, `AGE` oraz `ST012Q06NA`. Dalsze kroki wyboru modelu przeprowadzimy po znalezieniu optymalnej transformacji czasu.
+
+```{r, cache=TRUE}
+bc.model <- aov(time ~ BOOKID + task + CNT + gender + WEALTH + CULTPOSS + HEDRES +  MISCED + FISCED + IMMIG + ST012Q09NA + ST013Q01TA + ST123Q04NA + ST119Q04NA + ST062Q03TA, data=probka)
+gc()
+summary(bc.model)
+```
+
+Znajdziemy wykładnik transformacji Boxa-Coxa dla wybranej próbki.
+
+```{r, cache=TRUE}
+bc <- boxcox(bc.model, plotit=TRUE)
+wykladnik <- bc$x[which.max(bc$y)]
+```
+
+Optymalny wykładnik wynosi `r wykladnik`. Log-wiarygodność wynosi `r max(bc$y)`. 
+
+Porównajmy transformację Boxa-Coxa z transformacją log-trans. 
+
+```{r, cache=TRUE}
+ltr <- logtrans(bc.model, plotit=TRUE, alpha=seq(-min(probka$time) + 0.01, 0.5*max(probka$time), length.out=100))
+przesuniecie <- ltr$x[which.max(ltr$y)]
+```
+
+Optymalne przesunięcie wynosi `r przesuniecie`. Log-wiarygodność wynosi `r max(ltr$y)`.
+
+```{r, cache=TRUE}
+qplot((probka$time^wykladnik-1)/wykladnik)
+qplot(log(probka$time + przesuniecie))
+```
+
+Transformacje dały bardzo podobne rezultaty. Odpowiednią transformację wybierzemy poprzez diagnostykę reszt obu modeli.
+
+Transformujemy czas przy użyciu obu transformacji i usuwamy model użyty do znalezienia transformacji. 
+
+```{r}
+probka$time.bc <- (probka$time^wykladnik - 1)/wykladnik
+probka$time.log <- log(probka$time + przesuniecie)
+rm(bc.model, bc, ltr)
+```
+
+Przeprowadzamy diagnostykę reszt w obu transformacjach pod kątem normalności i jednorodności wariancji.
+
+```{r, cache=TRUE}
+bc.model <- lm(time.bc ~ BOOKID + task + CNT + gender + WEALTH + CULTPOSS + HEDRES +  MISCED + FISCED + IMMIG + ST012Q09NA + ST013Q01TA + ST123Q04NA + ST119Q04NA + ST062Q03TA, data=probka)
+bc.res <- rstandard(bc.model)
+qplot(bc.res)
+cvm.test(bc.res)
+rm(bc.model, bc.res)
+gc()
+```
+
+
+
+
+```{r, cache=TRUE}
+log.model <- lm(time.log ~ BOOKID + task + CNT + gender + WEALTH + CULTPOSS + HEDRES +  MISCED + FISCED + IMMIG + ST012Q09NA + ST013Q01TA + ST123Q04NA + ST119Q04NA + ST062Q03TA, data=probka)
+log.res <- rstandard(log.model)
+qplot(log.res)
+cvm.test(log.res)
+rm(log.model, log.res)
+gc()
+```
+
+
+Wartość statystyki W w teście Cramera-von Misesa, mierzącej odległość dystrybuanty empirycznej od teoretycznej, jest dwukrotnie mniejsza dla transformacji logarytmicznej. Z tego powodu wybieramy tę transformację do stworzenia właściwego modelu.  
+
+Usuwamy zbędne kolumny żeby ograniczyć zużycie pamięci.
+
+```{r}
+probka <- probka[, -c('time.bc')]
+gc()
+```
+
+# 4. Wybór modelu
+
+Przeprowadzimy teraz wybór modelu. Ponieważ interesuje nas eksploracja danych a nie predykcja, przeprowadzimy wybór modelu za pomocą kryterium BIC. Żeby modele były porównywane na tym samym zbiorze danych, utworzymy podzbiór testowy w którym nie będzie brakujących obserwacji. 
+
+```{r, eval=FALSE}
+# eval=FALSE bo model został zapisany poniżej a wybór modelu bardzo długo trwa
+bic.model <- lm(time.log ~ BOOKID + task + CNT + gender + WEALTH + CULTPOSS + HEDRES +  MISCED + FISCED + IMMIG + ST012Q09NA + ST013Q01TA + ST123Q04NA + ST119Q04NA + ST062Q03TA, data=probka)
+anova(bic.model)
+```
+
+
+Wybierzemy model metodą krokową poprzez usuwanie kolejnych zmiennych. 
+
+
+```{r, eval=FALSE}
+chosen.model <- step(bic.model, .~., k=log(nrow(probka)), direction="backward")
+```
+
+
+```{r, eval=FALSE}
+chosen.model$call
+```
+
+Zapisujemy otrzymaną formułę do dalszych analiz. 
+
+```{r}
+chosen.formula <- time.log ~ BOOKID + task + CNT + gender + WEALTH + 
+    HEDRES + MISCED + FISCED + IMMIG + ST012Q09NA + ST013Q01TA + 
+    ST123Q04NA + ST119Q04NA + ST062Q03TA
+```
+
+Usuwamy wybrany model, który został stworzony na wybranych danych z próbki.
+
+```{r, eval=FALSE}
+rm(bic.model, chosen.model)
+gc()
+```
+
+Budujemy model na pełnej próbie na podstawie wybranej formuły.
+
+```{r, cache=TRUE}
+chosen.model <- lm(chosen.formula, data=probka)
+chosen.anova <- anova(chosen.model)
+chosen.aov <- aov(chosen.formula, data=probka)
+chosen.anova
+```
+
+
+# 5. Diagnostyka
+
+Przed wizualizacją sprawdźmy poprawność modelu. 
+
+### Jenorodność wariancji:
+
+```{r, cache=TRUE}
+plot(chosen.model, which=3)
+```
+
+Wariancja jest stosunkowo jednorodna, odchylenia są nieznaczne. Zastosujemy test Flignera-Killeena, który jest odporny na odchylenia od normalności:
+
+```{r}
+fligner.test(chosen.anova)
+```
+
+P-wartość jest niska, ale z powodu liczności próby możemy nie odrzucać hipotezy o jednorodności wariancji.
+
+### Normalność reszt:
+
+```{r, cache=TRUE}
+reszty <- rstandard(chosen.model)
+qplot(reszty)
+cvm.test(reszty)
+ks.test(reszty, pnorm)
+```
+
+Reszty są zbliżone do rozkładu normalnego, ale mają zbyt dużą kurtozę równą `r kurtosis(reszty)` (w porównaniu do `0` dla rozkładu normalnego), przez co testy odrzucają hipotezę o normalności. Reszty są rozłożone dość symetrycznie, współczynnik skośności wynosi `r skewness(reszty)`.
+
+```{r, cache=TRUE}
+qqPlot(reszty)
+```
+
+Widać że kurtoza jest głównym powodem nienormalności rozkładu reszt, możemy zatem uznać że model jest poprawny.
+
+### Obserwacje wpływowe:
+
+```{r, cache=TRUE}
+plot(chosen.model, which=4)
+```
+
+Odległość Cooka jest bardzo niewielka we wszystkich przypadkach.
+
+
+```{r, cache=TRUE}
+plot(chosen.model, which=5)
+```
+
+Reszty są skupione, brak obserwacji odstających.
+
+Z powyższej diagnostyki możemy wnioskować że model jest poprawny. Zbyt wysoka kurtoza reszt oraz lekko niejednorodna wariancja w grupach nie powinny znacznie wpływać na estymację modelu. Możemy przejść do wizualizacji modelu.
+
+# 6. Wizualizacja
+
+Istotność poszczególnych zmiennych pokazuje następujący wykres wartości statystyki F:
+
+```{r}
+coef.names <- names(chosen.model$coefficients)
+F.data <- data.frame("Zmienna" = names(chosen.model$model)[-1], "Istotnosc" = chosen.anova$`F value`[-length(chosen.anova$`F value`)])
+F.data$Zmienna <- factor(F.data$Zmienna, levels=F.data$Zmienna[order(F.data$Istotnosc, decreasing=T)]) 
+ggplot(F.data, aes(x=Zmienna, y=Istotnosc)) + geom_bar(stat='Identity') +  theme(axis.text.x = element_text(angle = -45, hjust = 0))
+```
+
+Najwięcej zmienności w czasie rozwiązywania zadań wyjaśnia wskaźnik zasobów edukacyjnych w domu. Wykształcenie rodziców, zmienne odnoszące się do osobowości ucznia oraz liczba instrumentów muzycznych w domu wyjaśniają mało zmienności.
+
+
+### Zależność czasu rozwiązywania od zasobów edukacyjnych
+
+```{r}
+hedres.xlim <- c(min(probka$HEDRES), max(probka$HEDRES))
+hedres.plot.data <- data.frame('x' = seq(hedres.xlim[1], hedres.xlim[2], length.out=10))
+hedres.plot.data$hedres.estim <- chosen.model$coefficients[1] + chosen.model$coefficients["HEDRES"]*hedres.plot.data$x
+ggplot(data=hedres.plot.data) + geom_errorbar(aes(x=mean(hedres.xlim), ymin=quantile(probka$time.log, 0.05), ymax=quantile(probka$time.log, 0.95)), width=0.2) + geom_line(aes(x=x, y=hedres.estim), col=I("red")) + xlim(hedres.xlim) + xlab("HEDRES") + ylim(c(-1, 5)) + ylab("") + geom_point(aes(x=mean(hedres.xlim), y=quantile(probka$time.log, 0.5))) + ggtitle("Zależność czasu rozwiązywania od zmiennej HEDRES", subtitle="Wąsy oznaczają przedział ufności dla populacji na poziomie 90%, czarny punkt oznacza medianę") 
+```
+
+Zależność jest widoczna, ale w porównaniu ze zmiennością czasu rozwiązywania w populacji nie jest bardzo duża. To sugeruje że nasze zmienne dość słabo objaśniają czas rozwiązywania. 
+
+### Zależność czasu rozwiązywania od wykształcenia rodziców
+
+```{r}
+edu.data <- data.frame("ID" = c("MISCED0", "FISCED0", coef.names[grep("ISCED", coef.names)]), "Wplyw"=c(0, 0, chosen.model$coefficients[grep("ISCED", coef.names)]))
+edu.data$ISCED <- factor(str_sub(edu.data$ID, start=2), levels=c("ISCED-1", "ISCED0", "ISCED1", "ISCED2", "ISCED3", "ISCED4", "ISCED5", "ISCED6"))
+edu.data$Rodzic <- ifelse(is.na(str_match(edu.data$ID, "^M")), "Ojciec", "Matka")
+ggplot(edu.data, aes(x=ISCED, y=Wplyw, fill=Rodzic)) + geom_bar(stat="identity", position="dodge", width=0.5) + theme(axis.text.x = element_text(angle = -45, hjust = 0)) + ylim(c(-0.05, 0.05))
+```
+
+Widać, ze o ile wykształcenie matki korzystnie wpływa na czas rozwiązywania zadań, to wykształcenie ojca wręcz przeciwnie. Ponadto uczniowie którzy nie podali informacji o co najmniej jednym rodzicu rozwiązują zadania dużo szybciej niż inni. 
+
+### Zależność czasu rozwiązywania od kraju:
+
+Po uwzględnieniu zmiennych takich jak zasoby edukacyjne lub zamożność, które nie są zbalansowane w krajach, dużą rolę powinien odgrywać system edukacji. 
+
+```{r}
+kraj.czas <- data.frame("Kraj"=c("CNTPOL", names(chosen.model$coefficients[grep("CNT", names(chosen.model$coefficients))])), "Roznica" = c(0, chosen.model$coefficients[grep("CNT", names(chosen.model$coefficients))] ))
+kraj.czas$Kraj <- str_replace(kraj.czas$Kraj, "CNT", "")
+malMap <- joinCountryData2Map(kraj.czas, joinCode = "ISO3",
+  nameJoinColumn = "Kraj")
+mapCountryData(malMap, nameColumnToPlot="Roznica", catMethod = seq(-0.25, 0.25, length.out=40),
+  missingCountryCol = gray(.8), mapTitle="Czasy rozwiązywania zadań w porównaniu z polskimi uczniami", lwd=0.4, borderCol="black")
+```
+
+Widać pewną korelację przestrzenną. Najlepiej wypadły: Korea, Hong Kong, Holandia i Katar. Najgorzej wypadły Brazylia, Peru, Meksyk i Rosja. Spośród 55 badanych krajów, 34 mają lepsze czasy rozwiązywania niż Polska.
+
+Porównajmy pary krajów żeby wyodrębnić grupy. Ze względu na duży rozmiar próby, rozszerzymy przedziały ufności. Uzyskamy dzięki temu ciekawszą strukturę zależności. Dobierzemy p-wartość tak, aby Polska znalazla się w 3 grupach.
+
+```{r}
+# Grupowanie krajow
+lsd <- LSD.test(chosen.aov, "CNT", alpha=0.02, p.adj="holm")
+grupy.krajow <- lsd$groups
+grupy.pl <- grupy.krajow[grupy.krajow$trt=="POL",]
+wszystkie.grupy <- unique(unlist(str_split(grupy.krajow$M, '')))
+grupy.krajow2 <- lapply(wszystkie.grupy, function(g) as.character(grupy.krajow$trt[grep(g, grupy.krajow$M)]))
+names(grupy.krajow2) <- wszystkie.grupy
+grupy.pl2 <- grupy.krajow2[which(!is.na(str_match(grupy.pl$M, wszystkie.grupy)))]
+skroty <- sapply(unique(unlist(grupy.pl2)), isoToName)
+kraje.legenda <- paste(names(skroty), skroty, sep=', ')
+```
+
+
+```{r}
+# Rysowanie diagramu
+vd <- venn.diagram(grupy.pl2, NULL, fill=rainbow(length(grupy.pl2)), main="Grupy krajów o czasie rozwiązywania zadań zbliżonym do polskich", main.fontfamily = "sans", cex=1, euler.d=F, scaled=F)
+lg <- legendGrob(labels=kraje.legenda, gp=gpar(cex=0.8), vgap=unit(0.4, 'lines'))
+overlaps <- calculate.overlap(grupy.pl2)
+overlaps <- overlaps[order(as.integer(str_replace(names(overlaps), 'a', '')))]
+for (i in 1:length(overlaps)){
+  if(length(overlaps[[i]])>0)   vd[[i+3+length(grupy.pl2)]]$label <- paste(overlaps[[i]], collapse = ", ")  else  vd[[i+3+length(grupy.pl2)]]$label <- "N/A"
+}
+for (i in (length(overlaps)+1):(length(overlaps)+length(grupy.pl2))){
+  vd[[i+3+length(grupy.pl2)]]$label <- paste("Grupa ", i-length(overlaps))
+}
+# for(i in 1:length(vd)) vd[[i]]$label <- i
+vd.g <- gTree(children = gList(vd))
+grid.newpage()
+grid.arrange(vd.g, lg, ncol=2, widths=c(4, 1.2))
+```
+
+
+### Zależność od płci:
+
+```{r}
+plec.czas <- data.frame("Plec" = factor(c(1, 2)), "Czas" = chosen.model$coefficients["(Intercept)"] + c(0, chosen.model$coefficients["gender2"]))
+ggplot(data=plec.czas, aes(x=Plec, y=Czas)) + geom_bar(stat="identity", width=0.5, alpha=I(0.4), fill="black", col="black") + geom_errorbar(aes(ymin=Czas - sd(probka$time.log), ymax=Czas + sd(probka$time.log)), width=0.1) + ggtitle("Zależność czasu rozwiązywania od płci", subtitle="Wąsy reprezentują odchylenie standardowe w populacji")
+```
+
+Różnice pomiędzy płciami są dość nieznaczne, choć zauważalne statystycznie.
+
+```{r}
+pairwise.t.test(probka$time, probka$gender)
+```
+
+Nieznaczną różnicę widać również na boxplotach utworzonych bezpośrednio z czasów rozwiązywania (bez użycia modelu).
+
+```{r}
+ggplot(probka, aes(y = time.log, x = gender))   + geom_boxplot() + stat_summary(fun.y = mean, shape = 16, color = 'red', size = 2, geom = 'point') + geom_hline(aes(yintercept = mean(probka$time.log)), color = "blue", size = 2, alpha=0.4) + coord_flip() + ggtitle("Rozkład czasu rozwiązywania w zależności od płci")
+```
+
+
+
+# 7. Obróbka danych 
+
+```{r}
+# Żeby nie kompilować, dajemy eval=FALSE
+knitr::opts_chunk$set(echo = TRUE, warnings=FALSE, message = FALSE, eval=FALSE)
+```
+
+Ładowanie i obróbka danych
+
+```{r, cache=TRUE}
+studenci <- read.spss("Cy6_ms_cmb_stu_qqq.sav", use.value.labels=FALSE, to.data.frame = TRUE)
+kraje <- studenci[, c("CNTRYID", "CNT")]
+kraje <- unique(kraje)  # Mapowanie numer - skrót ISO3
+studenci <- studenci[, c("CNT", 
+                         "CNTSCHID",
+                         "CNTSTUID",
+                         "ST004D01T", 
+                         "WEALTH",
+                         "CULTPOSS",
+                         "HEDRES",
+                         "ANXTEST",
+                         "MISCED",
+                         "FISCED",
+                         "IMMIG",
+                         "AGE",
+                         "PA002Q07NA",
+                         "PA002Q08NA",
+                         "PA002Q10NA",
+                         "PA003Q02TA",
+                         "IC013Q12NA",
+                         "IC014Q08NA",
+                         "ST012Q09NA",
+                         "ST013Q01TA",
+                         "LANGTEST_QQQ",
+                         "ST012Q06NA",
+                         "ST123Q04NA",
+                         "ST011Q02TA",
+                         "ST119Q04NA",
+                         "ST034Q01TA",
+                         "ST034Q02TA",
+                         "ST039Q03NA",
+                         "ST039Q05NA",
+                         "ST039Q04NA",
+                         "ST062Q03TA",
+                         "ST076Q06NA",
+                         "ST078Q06NA",
+                         "ST076Q10NA",
+                         "ST078Q10NA",
+                         "IC003Q01TA",
+                         "IC008Q01TA",
+                         "IC008Q02TA")]  # BOOKID jest w zadaniach
+names(studenci)[names(studenci)=='ST004D01T'] = "gender"
+
+load("actionTimeScoreMath.rda")
+zadania <- actionTimeScoreMath; rm(actionTimeScoreMath)
+zadania <- zadania[, c("CNTSTUID", "BOOKID", "item_short", "S", "T", "position")]
+names(zadania)[names(zadania) == "T"] = "time"
+zadania <- zadania[!is.na(zadania$time), ]
+zadania$task <- gsub("Q\\d+", "", zadania$item_short)
+zadania$task <- as.factor(zadania$task)
+zadania$Q <- gsub("M\\d+\\D?Q", "Q", zadania$item_short)
+zadania$Q <- as.factor(zadania$Q)
+# Przenumerowanie Q
+non.empty <- apply(table(zadania$task, zadania$Q), 1, function(x) ifelse(x==0, 0, 1))
+question.id <- apply(non.empty, 2, function(x) ifelse(x==0, 0, cumsum(x)))
+zadania$Q.nb <- apply(zadania, 1, function(x) question.id[x["Q"], x["task"]])
+zadania$Q.nb <- factor(zadania$Q.nb)
+rm(non.empty, question.id)
+```
+
+Podgląd danych
+
+```{r}
+head(zadania)
+head(studenci)
+```
+
+
+```{r}
+table(zadania$task, zadania$Q)
+table(zadania$task, zadania$Q.nb)
+```
+
+Łączenie tabel zadań i studentów
+
+```{r, cache=TRUE}
+indeksy.uczniow <- match(zadania$CNTSTUID, studenci$CNTSTUID)
+pelne.dane <- cbind(zadania, studenci[indeksy.uczniow, -3])
+rm(zadania, studenci, indeksy.uczniow)
+gc()
+head(pelne.dane)
+```
+
+
+Liczby rozwiązań zadań z kwestionariuszy:
+
+```{r}
+table(pelne.dane$BOOKID)
+qplot(log10(c(table(pelne.dane$BOOKID))))
+```
+
+Widać, że kwestionariusze występują w bardzo różnych ilościach. Są trzy wyraźne grupy liczności - kwestionariusze mają po kilkadziesiąt, kilka tysięcy lub kilkanaście tysięcy rozwiązań.
+
+Sprawdźmy czy kwestionariusze są równo rozłożone w krajach.
+
+```{r}
+table(pelne.dane$CNT, pelne.dane$BOOKID)
+```
+
+Widać że struktura rozmieszczenia kwestionariuszy w krajach jest bardzo złożona. Kwestionariusze 33-42 oraz 93 są czysto brytyjskie. Kwestionariusz 42 był wyłącznie w Katarze. Z tego powodu te kwestionariusze mogą dawać specyficzne wyniki, więc usuwamy je z danych.
+
+```{r}
+samotne.kwestionariusze <- which(apply(table(pelne.dane$CNT, pelne.dane$BOOKID), 2, function(x) sum(x!=0))==1)
+samotne.kwestionariusze <- names(samotne.kwestionariusze)
+do.usuniecia <- which(!is.na(match(pelne.dane$BOOKID, samotne.kwestionariusze)))
+pelne.dane <- pelne.dane[-do.usuniecia, ]
+rm(do.usuniecia)
+pelne.dane$BOOKID <- factor(pelne.dane$BOOKID)
+gc()
+```
+
+Struktura kwestionariuszy po obróbce:
+
+```{r}
+table(pelne.dane$CNT, pelne.dane$BOOKID)
+qplot(log10(c(table(pelne.dane$BOOKID))))
+```
+
+Brak specyficznych kwestionariuszy (mających mniej niż 100 rozwiazań).
+
+W niektórych krajach brakuje rozwiązań. Z tego powodu przefaktorujemy kraje, przy okazji usuwając dziwne tabulacje za skrótem kraju.
+
+```{r}
+pelne.dane$CNT <- str_trim(as.character(pelne.dane$CNT))
+pelne.dane$CNT <- factor(pelne.dane$CNT)
+```
+
+Przyjrzyjmy się teraz liczbom rozwiązań oraz uczniów w krajach.
+
+```{r}
+table(pelne.dane$CNT)
+tapply(pelne.dane$CNTSTUID, pelne.dane$CNT, function(x) length(unique(x)))
+```
+
+Kraje oznaczone QUC i QUE wyraźnie odstają pod względem liczby rozwiązań oraz uczniów od innych krajów. 
+
+```{r}
+szkoly <- unique(pelne.dane[, c("CNT", "CNTSCHID")])
+liczby.szkol <- tapply(szkoly$CNTSCHID, szkoly$CNT, length)
+sort(liczby.szkol)[1:10]
+```
+
+QUC oraz QUE mają tylko jedną szkołę objętą programem. Skrót QUC oznacza Massachussets, a skrót QUE oznacza Północną Karolinę. Ponieważ nie są to kraje tylko stany USA, i nie znamy powodu wyodrębnienia tych stanów, usuwamy je z danych.
+
+```{r}
+quc.que <- which(!is.na(match(pelne.dane$CNT, c("QUE", "QUC"))))
+if(length(quc.que)>0) pelne.dane <- pelne.dane[-quc.que, ]  # w przypadku length(quc.que) = 0 to by spowodowało usunięcie danych
+pelne.dane$CNT <- factor(pelne.dane$CNT)
+```
+
+Sprawdźmy czy język kwestionariusza odpowiada krajowi.
+
+```{r}
+table(pelne.dane$CNT, pelne.dane$LANGTEST_QQQ)
+```
+
+```{r}
+apply(table(pelne.dane$CNT, pelne.dane$LANGTEST_QQQ), 1, function(x) sum(x!=0))
+```
+
+W niektórych krajach kwestionariusze były rozwiązywane w różnych językach (w Hiszpanii m.in. hiszpański, baskijski, galicyjski). Język kwestionariusza moze mieć duży wpływ na czas rozwiązywania, więc warto go uwzględnić jako efekt zagnieżdżony w kraju.
+
+Sprawdźmy proporcje pustych pól w poszczególnych kolumnach:
+
+```{r}
+tmp <- nrow(pelne.dane)
+empty.fields <- apply(pelne.dane, 2, function(x) sum(is.na(x))/tmp)
+empty.fields
+```
+
+Część kolumn jest prawie pusta. Wybierzmy te, które mają co najwyżej 5% brakujących odpowiedzi. Dodajmy wykształcenie ojca, wynik testu i wskaźnik zasobów kulturowych w domu, ponieważ te zmienne są interesujące, a brakujące pola mogą być uzupełnione dodatkowym poziomem faktora. 
+
+```{r}
+chosen.columns <- empty.fields <= 0.05
+chosen.columns['FISCED'] = TRUE 
+chosen.columns['CULTPOSS']= TRUE
+chosen.columns['S'] = TRUE
+pelne.dane <- pelne.dane[, chosen.columns]
+rm(empty.fields, tmp)
+gc()
+head(pelne.dane)
+```
+
+W przypadku zmiennych numerycznych musimy usunąć brakujące dane.
+
+```{r}
+missing.data <- is.na(pelne.dane$HEDRES) | is.na(pelne.dane$CULTPOSS) | is.na(pelne.dane$ANXTEST) | is.na(pelne.dane$WEALTH)
+pelne.dane <- pelne.dane[!missing.data, ]  
+rm(missing.data)
+head(pelne.dane)
+```
+
+Przefaktorowujemy dane po obróbce.
+
+```{r}
+pelne.dane$S <- factor(pelne.dane$S)
+pelne.dane$CNT <- factor(pelne.dane$CNT)
+pelne.dane$item_short <- factor(pelne.dane$item_short)
+pelne.dane$CNTSCHID <- factor(pelne.dane$CNTSCHID)
+pelne.dane$CNTSTUID <- factor(pelne.dane$CNTSTUID)
+pelne.dane$gender <- factor(pelne.dane$gender)
+pelne.dane$BOOKID <- factor(pelne.dane$BOOKID)
+pelne.dane$position <- factor(pelne.dane$position)
+pelne.dane$task <- factor(pelne.dane$task)
+pelne.dane$Q <- factor(pelne.dane$Q)
+pelne.dane$Q.nb <- factor(pelne.dane$Q.nb)
+pelne.dane$MISCED <- factor(pelne.dane$MISCED)
+pelne.dane$FISCED <- factor(pelne.dane$FISCED)
+pelne.dane$IMMIG <- factor(pelne.dane$IMMIG)
+pelne.dane$ST012Q09NA <- factor(pelne.dane$ST012Q09NA)
+pelne.dane$ST013Q01TA <- factor(pelne.dane$ST013Q01TA)
+pelne.dane$LANGTEST_QQQ <- factor(pelne.dane$LANGTEST_QQQ)
+pelne.dane$ST012Q06NA <- factor(pelne.dane$ST012Q06NA)
+pelne.dane$ST123Q04NA <- factor(pelne.dane$ST123Q04NA)
+pelne.dane$ST011Q02TA <- factor(pelne.dane$ST011Q02TA)
+pelne.dane$ST119Q04NA <- factor(pelne.dane$ST119Q04NA)
+pelne.dane$ST062Q03TA <- factor(pelne.dane$ST062Q03TA)
+```
+
+Dodajemy dodatkowe poziomy faktorów dla zakodowania brakujących obserwacji
+
+```{r}
+levels(pelne.dane$S) <- c(levels(pelne.dane$S), -1)
+levels(pelne.dane$CNT) <- c(levels(pelne.dane$CNT), -1)
+levels(pelne.dane$item_short) <- c(levels(pelne.dane$item_short), -1)
+levels(pelne.dane$CNTSCHID) <- c(levels(pelne.dane$CNTSCHID), -1)
+levels(pelne.dane$CNTSTUID) <- c(levels(pelne.dane$CNTSTUID), -1)
+levels(pelne.dane$gender) <- c(levels(pelne.dane$gender), -1)
+levels(pelne.dane$BOOKID) <- c(levels(pelne.dane$BOOKID), -1)
+levels(pelne.dane$position) <- c(levels(pelne.dane$position), -1)
+levels(pelne.dane$task) <- c(levels(pelne.dane$task), -1)
+levels(pelne.dane$Q) <- c(levels(pelne.dane$Q), -1)
+levels(pelne.dane$Q.nb) <- c(levels(pelne.dane$Q.nb), -1)
+levels(pelne.dane$MISCED) <- c(levels(pelne.dane$MISCED), -1)
+levels(pelne.dane$FISCED) <- c(levels(pelne.dane$FISCED), -1)
+levels(pelne.dane$IMMIG) <- c(levels(pelne.dane$IMMIG), -1)
+levels(pelne.dane$ST012Q09NA) <- c(levels(pelne.dane$ST012Q09NA), -1)
+levels(pelne.dane$ST013Q01TA) <- c(levels(pelne.dane$ST013Q01TA), -1)
+levels(pelne.dane$LANGTEST_QQQ) <- c(levels(pelne.dane$LANGTEST_QQQ), -1)
+levels(pelne.dane$ST012Q06NA) <- c(levels(pelne.dane$ST012Q06NA), -1)
+levels(pelne.dane$ST123Q04NA) <- c(levels(pelne.dane$ST123Q04NA), -1)
+levels(pelne.dane$ST011Q02TA) <- c(levels(pelne.dane$ST011Q02TA), -1)
+levels(pelne.dane$ST119Q04NA) <- c(levels(pelne.dane$ST119Q04NA), -1)
+levels(pelne.dane$ST062Q03TA) <- c(levels(pelne.dane$ST062Q03TA), -1)
+```
+
+Oznaczamy brakujące dane w faktorach. 
+
+```{r}
+pelne.dane$S[is.na(pelne.dane$S)] <- -1
+pelne.dane$FISCED[is.na(pelne.dane$FISCED)] <- -1 
+pelne.dane$MISCED[is.na(pelne.dane$MISCED)] <- -1 
+pelne.dane$IMMIG[is.na(pelne.dane$IMMIG)] <- -1 
+pelne.dane$ST012Q09NA[is.na(pelne.dane$ST012Q09NA)] <- -1 
+pelne.dane$ST013Q01TA[is.na(pelne.dane$ST013Q01TA)] <- -1 
+pelne.dane$LANGTEST_QQQ[is.na(pelne.dane$LANGTEST_QQQ)] <- -1 
+pelne.dane$ST012Q06NA[is.na(pelne.dane$ST012Q06NA)] <- -1 
+pelne.dane$ST123Q04NA[is.na(pelne.dane$ST123Q04NA)] <- -1 
+pelne.dane$ST011Q02TA[is.na(pelne.dane$ST011Q02TA)] <- -1 
+pelne.dane$ST119Q04NA[is.na(pelne.dane$ST119Q04NA)] <- -1 
+pelne.dane$ST062Q03TA[is.na(pelne.dane$ST062Q03TA)] <- -1 
+```
+
+Ustalamy referencyjne poziomy faktorów.
+
+```{r}
+pelne.dane$CNT <- relevel(pelne.dane$CNT, ref=which(levels(pelne.dane$CNT)=="POL"))
+```
+
+Czas rozwiązania jest mierzony w milisekundach. Dla ułatwienia interpretacji zakodujemy go w minutach.
+
+```{r}
+pelne.dane$time <- pelne.dane$time/60000
+```
+
+Sprawdźmy kwantyle czasu rozwiązań na obecność obserwacji odstających:
+
+```{r}
+quantile(pelne.dane$time)
+qplot(seq(0, 1, length.out=101), quantile(pelne.dane$time, probs=seq(0, 1, length.out=101)))
+qplot(seq(0, 1, length.out=101), log10(quantile(pelne.dane$time, probs=seq(0, 1, length.out=101))))
+```
+
+Widać wyraźny skok o rząd wielkości po prawej stronie odpowiadający za obserwacje odstające (uczeń odszedł od komputera). Kwantyl rzędu 0.99 wynosi `r quantile(probka$time, probs=0.99)`, a najwyższy czas rozwiązywania wynosi `r max(probka$time)` i jest `r max(probka$time)/quantile(probka$time, probs=0.99)` razy większy od 99% rozwiązań. Z tego powodu będziemy cenzurować czasy rozwiązania dłuższe niż 10 minut.
+
+```{r}
+pelne.dane$time <- pmin(pelne.dane$time, 10)
+```
+
+Rozkład czasu rozwiązań:
+
+```{r}
+qplot(pelne.dane$time)
+```
+
+Widać małą górkę po prawej stronie odpowiadającą trymowanym czasom rozwiązywania.
+
+Zapisujemy obrobione dane do przyszłego załadowania.
+
+```{r}
+# write.csv(pelne.dane, "Curated_full_data.csv", row.names=FALSE)
+```
+
+
+# 8. Wybór szkół do analizy
+
+Wybieramy z każdego kraju co czwartą szkołę (tzw. proportionate quota sampling). Wybieranie ustaloniej liczby gorzej odwzorowuje strukturę zadań i może zaburzyć wariancję wewnątrz krajów. 
+
+```{r}
+# wybrane.szkoly <- tapply(szkoly$CNTSCHID, szkoly$CNT, function(x) sample(x, as.integer(length(x)/4), replace=F))
+# wybrane.szkoly <- lapply(wybrane.szkoly, as.character)  # konwersja do str bo inaczej unlist zmienia faktory na liczby
+# wybrane.szkoly <- unlist(wybrane.szkoly)
+# wybrane.szkoly <- factor(wybrane.szkoly)
+```
+
+Zapisujemy wybrane szkoły w pliku żeby mieć stały dataset do wszystkich analiz.
+
+```{r}
+# write.csv(wybrane.szkoly, "Chosen_schools.csv", row.names=FALSE)
+```
+
+Wybór próbki na podstawie wybranych szkół:
+
+```{r}
+probka <- pelne.dane[pelne.dane$CNTSCHID %in% wybrane.szkoly, ]
+head(probka)
+tapply(probka$CNTSCHID, probka$CNT, function(x) length(unique(x)))
+# Przepoziomowanie faktorów
+probka$CNTSCHID = factor(probka$CNTSCHID, levels=unique(probka$CNTSCHID))
+probka$CNTSTUID = factor(probka$CNTSTUID, levels=unique(probka$CNTSTUID))
+probka$BOOKID = factor(probka$BOOKID)
+```
+
+Porównanie struktury zadań w próbce i populacji
+
+```{r}
+table(pelne.dane$item_short); table(probka$item_short)
+table(pelne.dane$item_short)/table(probka$item_short)
+table(pelne.dane$CNT); table(probka$CNT)
+table(pelne.dane$CNT)/table(probka$CNT)
+qplot(c(table(pelne.dane$item_short)/table(probka$item_short)), geom="histogram", xlab="Proporcja liczby obserwacji w populacji do liczby obserwacji w próbce dla różnych podpunktów")
+qplot(c(table(pelne.dane$CNT)/table(probka$CNT)), geom="histogram", xlab="Proporcja liczby obserwacji w populacji do liczby obserwacji w próbce dla różnych krajów")
+```
+
+Przy wyborze co czwartej szkoły struktura zadań i krajów jest dość dobrze zachowana. 
+
+W przypadku mniejszej liczby szkół zauważyliśmy że zdarza się kilka nietypowych proporcji obserwacji w krajach. W najbardziej nietypowych krajach liczba rozwiązań w próbie była dwukrotnie mniejsza od spodziewanej. To sugeruje nierównomierny rozkład uczniów w szkołach. Być może uwzględnienie rozmiaru szkół pozwoliłoby na dalsze zmniejszenie liczby danych przy zachowaniu struktury.
+
+W przypadku wybierania co dziesiątej szkoły Luksemburg był przykładem kraju o zaburzonej strukturze, a Francja o zachowanej. Z tego powodu interesujące jest porównanie struktury szkół w tych krajach.
+
+```{r, cache=TRUE}
+# Konwersja do faktorów po wybraniu kraju przyspiesza obliczenia ponieważ usuwa zbędne poziomy
+qplot(c(tapply(factor(pelne.dane[pelne.dane$CNT=="LUX", ]$CNTSTUID), factor(pelne.dane[pelne.dane$CNT=="LUX", ]$CNTSCHID), function(x) length(unique(x)))), main="Struktura szkół w Luksemburgu")
+qplot(c(tapply(factor(pelne.dane[pelne.dane$CNT=="FRA", ]$CNTSTUID), factor(pelne.dane[pelne.dane$CNT=="FRA", ]$CNTSCHID), function(x) length(unique(x)))), main="Struktura szkół we Francji")
+```
+
+Widać że struktura jest bardzo różna. We Francji większość szkół ma około 10 uczniów. W Luksemburgu szkoły sa dużo bardziej zróżnicowane, liczba uczniów wynosi od kilku do 125. Ponadto liczba szkół w Luksemburgu wynosi 44, podczas gdy średnia liczba szkół dla innych krajów wynosi 261. Tak wysoka wariancja w połączeniu z niewielką próbą była najprawdopodbniej przyczyną braku zachowania struktury szkół. Wybieranie co czwatej szkoły zapewniło wystarczająco gęste wypróbkowanie żeby zachować wariancję szkół w Luksemburgu:
+
+```{r, cache=TRUE}
+# Konwersja do faktorów po wybraniu kraju przyspiesza obliczenia ponieważ usuwa zbędne poziomy
+qplot(c(tapply(factor(probka[probka$CNT=="LUX", ]$CNTSTUID), factor(probka[probka$CNT=="LUX", ]$CNTSCHID), function(x) length(unique(x)))), main="Struktura szkół w Luksemburgu w próbce")
+qplot(c(tapply(factor(probka[probka$CNT=="FRA", ]$CNTSTUID), factor(probka[probka$CNT=="FRA", ]$CNTSCHID), function(x) length(unique(x)))), main="Struktura szkół we Francji w próbce")
+```
+
+```{r, cache=TRUE}
+# Inny sposób wybrania próbki, uwzględniający strukturę zadań, ale nie uczniów w szkołach:
+# rozmiary.podgrup <- tapply(1:nrow(pelne.dane), list(pelne.dane$CNT, pelne.dane$item_short), function(x) length(x))
+# rozmiary.podgrup <- c(rozmiary.podgrup)
+# rozmiary.podgrup <- ifelse(is.na(rozmiary.podgrup), 0, rozmiary.podgrup)
+# qplot(rozmiary.podgrup, geom="histogram", binwidth=10, xlab="Rozmiary grup")
+# indeksy.probki <- tapply(1:nrow(pelne.dane), list(pelne.dane$CNT, pelne.dane$item_short), function(x) sample(x,  as.integer(length(x)/10), replace=F))
+# indeksy.probki <- sort(unlist(indeksy.probki))
+# probka <- pelne.dane[indeksy.probki, ]
+```
