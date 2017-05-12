@@ -1,0 +1,150 @@
+---
+title: "Dane powtarzane w czasie (longitudinal studies - random coefficients)"
+author: "Przemyslaw Biecek"
+date: "Modele liniowe"
+output: 
+  html_document:
+    toc: TRUE
+---
+
+# 1 Model z losowymi współczynnikami
+
+## 1.1 Zbiór danych `kidney`
+
+Zmienna MDRD to ocena sprawności nerki, czyli tzw. Glomerular Filtration Rate (GFR). Ta wartość jest używana do oceny czy nerka wciąż sprawnie filtruje krew. Interpretacja jest taka, że im wyższa wartość MDRD tym lepiej.
+
+W zbiorze danych `kidney` mamy profile zmian w MDRD dla pacjentów po transplantacji nerki. Pomiary zaczynają się 7 dni po przeszczepie, są prowadzone w nieregularnych chwilach, ostatni pomiar mamy w 60 miesiącu po przeszczepie (o ile pacjent dożył tego czasu).
+
+```{r, message=FALSE, warning=FALSE}
+library(lme4)
+library(PBImisc)
+head(kidney)
+```
+
+Do dalszych analiz potrzebujemy przekształcić dane do tzw. długiego formatu (też nazywanego RCV row-column-value).
+
+```{r, message=FALSE, warning=FALSE}
+lkidney = reshape(kidney, direction="long", varying=list(9:16), v.names=c("MDRD"), times=c(1/4,1,3,6,12,24,36,60))
+head(lkidney[,5:11])
+```
+
+Ponieważ punkty czasowe są nierównomiernie rozłożone, dobrym pomysłem jest użycie `log(time)` zamiast `time`.
+
+```{r, message=FALSE, warning=FALSE}
+lkidney$ltime = log(lkidney$time)
+lkidney$title = factor(with(lkidney, paste("wiek ", recipient.age,"/",donor.age, ", zgod. ", discrepancy.AB,"/",discrepancy.DR, sep="")))
+```
+
+## 1.2 Wykresy
+
+Mamy dane, czas je narysować.
+Pokażemy dynamikę zmiany poziomu MDRD z różnymi współczynnikami (wielomian stopnia 0, 1 i 2).
+
+```{r, message=FALSE, warning=FALSE, fig.width=10, fig.height=10}
+library(lattice)
+# panel for lattice package
+panel.with.square <- function(...){
+  nx = list(...)$x
+  ny = list(...)$y
+  cc = lm(ny~nx+I(nx^2))$coef
+  panel.xyplot(...)
+  panel.curve(x^2*cc[3]+x*cc[2]+cc[1], from=min(nx), to=max(nx), col="red")
+}
+# the plot
+xyplot(MDRD ~ log(time) | title, lkidney, type = c("g","p","r"),
+  xlab = "log(time after graft)", ylab = "MDRD", pch=19,
+  panel = panel.with.square, subset= id>20 & id < 51)
+```
+
+## 1.3 Modele
+
+Teraz możemy rozpocząć modelowanie.
+
+Porównajmy trzy modele, tylko z wyrazem wolnym, nachyleniem i jednym i drugim.
+
+```{r, message=FALSE, warning=FALSE}
+(model0 = lmer(MDRD~1 + (1|id), data=lkidney, REML=FALSE))
+(model1 = lmer(MDRD~ltime + (ltime|id), data=lkidney, REML=FALSE))
+(model1bis = lmer(MDRD~ltime + (ltime-1|id) + (1|id), data=lkidney))
+```
+
+Jak wyłuskać współczynniki dla poszczególnych pacjentów?
+
+```{r, message=FALSE, warning=FALSE}
+fixef(model1)
+head(ranef(model1)$id)
+
+randomCoefs = t(t(ranef(model1)$id) + fixef(model1))
+head(randomCoefs)
+```
+
+## 1.4 Modele z efektami stałymi
+
+Dla każdego pacjenta, moglibyśmy wyznaczyć model liniowy tylko z efektami stałymi.
+
+Zobaczmy jak wygląda porównanie obu podejść do modelowania.
+
+```{r, message=FALSE, warning=FALSE}
+model1fixed = lm(MDRD~ltime:factor(id) + factor(id) - 1, data=lkidney)
+fixedCoefs = matrix(coef(model1fixed), ncol=2)
+head(fixedCoefs)
+```
+
+```{r, eval=FALSE}
+lmList(MDRD ~ time | id, lkidney)
+## Call: lmList(formula = MDRD ~ time | id, data = lkidney) 
+## Coefficients:
+##     (Intercept)         time
+## 1      63.09062  0.219859695
+## 2      55.55200  0.165792565
+## 3      33.66915  0.157798211
+## 4      39.20332  0.984699102
+## 5      62.64902  0.126592898
+## 6      39.30236  0.313399820
+## 7      40.23394  0.113381365
+## 8      61.81949  0.298376739
+## 9      49.41234  0.750096638
+## 10     32.69759  0.216655569
+```
+
+## 1.5 Efekt regularyzacji  
+
+Porównajmy teraz współczynniki wyznaczone obiema metodami na jednym wykresie. 
+
+Co się dzieje ze współczynnikami?
+  
+```{r, message=FALSE, warning=FALSE, fig.width=10, fig.height=10}
+plot(fixedCoefs[,1], fixedCoefs[,2], cex=1, pch=21, lwd=3, col="red3", xlab=expression(a[i]), ylab=expression(b[i]))
+
+abline(v=fixef(model1)[1], col="grey", lwd=2, lty=2)
+abline(h=fixef(model1)[2], col="grey", lwd=2, lty=2)
+arrows(fixedCoefs[,1], fixedCoefs[,2], randomCoefs[,1], randomCoefs[,2], angle=15, length=0.1, lwd=1)
+points(randomCoefs[,1], randomCoefs[,2], cex=1, pch=7, lwd=2, col="blue3")
+```
+
+## 1.6 Wielomiany wyższych stopni
+
+Próbowaliśmy modeli z wielomianami drugiego stopnia, ale możemy próbować też modeli wyższych stopni.
+
+Zobaczmy jak wyglądają modele trzeciego stopnia.
+Aby sprawdzić istotność takiego modelu, wykorzystamy test ilorazu wiarogodności.
+
+```{r, message=FALSE, warning=FALSE}
+(model2 = lmer(MDRD~ltime + I(ltime^2) + (ltime+I(ltime^2)|id), data= lkidney, REML=FALSE))
+
+anova(model2,model1,model0)
+```
+
+## 1.7 Inne efekty stałe
+
+Mamy już zmienne definiującą strukturę zależności, możemy przyjrzeć się jeszcze raz innym efektom stałym.
+
+W tym przypadku istotnymi zmiennymi jest wiek pacjenta, liczba leków i czas po przeszczepie.
+
+```{r, message=FALSE, warning=FALSE}
+(fullModel = lmer(MDRD~donor.age+ recipient.age+ therapy+ diabetes+ bpl.drugs+ discrepancy.AB+ discrepancy.DR + ltime + I(ltime^2) + (ltime + I(ltime^2)|id), data=lkidney, REML=FALSE))
+
+(finalModel = lmer(MDRD~donor.age+ bpl.drugs+ ltime + I(ltime^2) + (ltime+I(ltime^2)|id), data=lkidney, REML=FALSE))
+
+```
+
