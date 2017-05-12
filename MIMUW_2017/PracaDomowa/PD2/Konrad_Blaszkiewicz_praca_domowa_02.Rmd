@@ -1,0 +1,119 @@
+```{r}
+library(tidyverse)
+library(stringr)
+
+gen_groups <- function(group_size, y_mean, x_values) {
+  y <- unlist(map2(group_size, y_mean, rnorm))
+  x <- rep(x_values, group_size)
+  data.frame(x,y)
+}
+
+p_val_from_anova_no_intercept<- function(data) {
+    model <- anova(lm(y~x-1, data = data))
+    model[1,5]
+}
+
+p_val_from_anova_with_intercept <- function(data) {
+    model <- anova(lm(y~x, data = data))
+    model[1,5]
+}
+
+
+check_power <- function(N, group_size, y_means, x_values, p_value_extractor = p_val_from_anova_with_intercept) {
+  gen_data_and_get_p <- function(...) {
+    gen_groups(group_size, y_means, x_values) %>% p_value_extractor
+  }
+  p_vals <- map_dbl(1:N, gen_data_and_get_p)
+  power <-  sum(p_vals <= 0.05)/N
+  ggplot() + aes(p_vals) + geom_histogram() +
+      annotate("text", x = 0.1, y = 10, label= str_interp("p-value < 0.05 for ${power}"))
+}
+```
+```{r}
+sizes_balanced = c(333, 333, 333)
+sizes_unbalanced_1 = c(200,500,300)
+sizes_unbalanced_2 = c(100,800,100)
+sizes_unbalanced_3 = c(800,100,100)
+#sizes_unbalanced_4 = c(100,200,100)
+
+means_different = c(0,1,0)
+means_very_different = c(0,10,0)
+means_same = c(0,0,0)
+means_slightly_different = c(0,0.1,0)
+x_values = c("a","b","c")
+N = 2000
+
+```
+
+
+
+```{r}
+check_power(N, sizes_balanced, means_same, x_values)
+#means are same we should really accept H_0, so we don't calculate power here
+```
+
+```{r}
+check_power(N, sizes_unbalanced_1, means_same, x_values)
+```
+```{r}
+check_power(N, sizes_unbalanced_2, means_same, x_values)
+```
+
+```{r}
+check_power(N, sizes_unbalanced_3, means_same, x_values)
+```
+
+
+```{r}
+check_power(N, sizes_balanced, means_very_different, x_values)
+```
+
+```{r}
+check_power(N, sizes_balanced, means_different, x_values)
+```
+
+
+
+
+
+```{r}
+check_power(N, sizes_balanced, means_slightly_different, x_values)
+```
+```{r}
+check_power(N, sizes_balanced, means_slightly_different*2, x_values)
+```
+```{r}
+check_power(N, sizes_unbalanced_1, means_slightly_different*2, x_values)
+```
+```{r}
+check_power(N, sizes_unbalanced_2, means_slightly_different*2, x_values)
+```
+
+
+```{r}
+check_power(N, sizes_unbalanced_2, means_slightly_different*3, x_values)
+```
+
+
+
+
+
+```{r}
+check_power(N, sizes_unbalanced_1, means_different, x_values)
+```
+
+Zakładmy poziom istnotnosci 0,05. liczba obserwacji, n = 1000, liczba grup 3.
+
+Dla przypadku prawdziwego H_0(srednie w grupach sa rowne) widzimy że rozkład p-wartości jest podobny do rozkladu jednostajnego, i przy ustalonym poziomie istotnosci testu dostajemy, proporcja p-wartosci mniejsza poziomy istatnosci jest bliska poziomowi istotnosci zarówno dla przypadkow grup zbalasnowanych i nie zbalansowanych.
+
+Dla przypadku przypadku H_1(srednia w grupie "b" jest wyższa) widzimy że rozkład p-wartości jest skupiony blizej zero dla każdego wypadku, lecz moc testu jest różna w zależności od tego czy grupy maja taka samą liczność. 
+
+Największą moc dostajemy gdy grupa o średniej zerowej jest największa(sizes_unblanced_3). 
+Najmniejszą moc dostajemy dla przypadku gdy grupa o średniej zerowej jest najmniejsza(sizes_unbalanced_2).
+Gdy grupy są zbalansowe moc testu wynosi 0.756
+Wyższa moc 0.84 otrzymujemy dla przypadku gdy liczba probek o wyższej średniej jest równa liczbie próbek o średniej zerowe(sizes_unbalanced_1).
+
+
+
+
+

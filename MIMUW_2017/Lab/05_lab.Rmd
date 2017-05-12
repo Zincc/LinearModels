@@ -1,0 +1,30 @@
+---
+title: "Analiza dwukierunkowa"
+author: "Przemyslaw Biecek"
+---
+
+# Epidemiologia Chorób Alergicznych w Polsce: ECAP
+
+Dzisiaj będziemy pracować na zbiorze danych ECAP: http://www.ecap.pl/.
+
+Wybrane kolumny z tego zbioru danych są dostępne w tabeli `ecap` w pakiecie `PBImisc`.
+
+```{r}
+library(PBImisc)
+head(ecap, 3)
+```
+
+# Plan na spotkanie
+
+1. Wczytaj zbiór danych
+
+2. Kolumna PNIF opisuje szczotową wartość przepływu powietrza przez nos u badanych osób. 
+
+3. Wykonaj analizę graficzną, sprawdź czy miasta i dzielnice różnią się pod kątem średniej wartości PNIF.
+
+4. Czy dzielnica i miasto należy traktować jako efekty crossed czy nested? Czy jest różnica w ynikach? Dlaczego?
+
+5. Dodaj płeć i wiek do modelu. Czy wyniki się zmieniły?
+
+
+

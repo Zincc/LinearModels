@@ -1,0 +1,137 @@
+---
+title: "cw3"
+author: "Dawid Dabkowski"
+date: "14.03.2017"
+output: html_document
+---
+
+```{r}
+library(rmarkdown)
+library(PBImisc)
+library(dplyr)
+```
+
+<!---
+dane <- schizophrenia
+
+inter <- function(i, j) {
+  a <- unclass(by(dane$Dikeos.sum, dane[,c(i,j)], mean))
+  interaction.plot(dane[,i], dane[,j], dane$Dikeos.sum)
+  a
+}
+
+inter(1,2)
+inter(1,3)
+inter(2,3)
+--->
+
+Stworzymy tabele, w ktorej wystepuje liniowa zaleznosc miedzy efektami 
+w wierszach i kolumnach. Zobaczymy, czy wystepuje efekt interackji. Zak³adamy równie¿, ¿e uk³ad jest zrównowa¿ony.
+
+```{r}
+A <- factor(rep(c(1,2,3,1,2,3), each=30))
+B <- factor(rep(1:2, each=90))
+
+C <- c(rep(10, 30), rep(20,30), rep(0,30), rep(15,30), rep(25,30), rep(5,30))
+frame1 <- data.frame(A, B, C) 
+unclass(by(frame1[,3], frame1[,c(1,2)], mean))
+interaction.plot(frame1[,1], frame1[,2], frame1[,3])
+a1 <- anova(lm(C~A*B, frame1))
+a1["A:B","Pr(>F)"]
+```
+
+Oczywiscie efektu interakcji nie ma. Pokazuje to zarowno wykres interakcji jak i wartosc testu F powyzej poziomu istotnosci.
+
+Zobaczmy w takim razie czy zajdzie efekt interakcji dla uk³adu zrównowa¿onego ale przy losowo zaburzonych danych. Doswiadczenie powtorzymy wiele razy i zbadamy ile razy wystapila interakcja dla testu na poziomie istotnosci 0.05.
+
+```{r}
+
+m <- 1000
+
+test.frame1 <- function(n=0) {
+  p <- c()
+  for (i in 1:m) {
+    C <- c(rnorm(30+n, mean=10), rnorm(30, mean=20), rnorm(30, mean=0), rnorm(30-n, mean=15), rnorm(30, mean=25), rnorm(30, mean=5))
+    frame <- data.frame(A, B, C)
+    a <- anova(lm(C~A*B, frame))
+    p[i] <- a["A:B","Pr(>F)"]
+  }
+  sum(p<0.05)
+}
+
+test.frame1()
+
+```
+
+Jak widaæ dodanie zaburzenia nie powoduje powstania istotnych interakcji (liczba testow na poziomie istotnosci 0.05, ktore wykazaly interakcje jest na poziomie 5% wszystkich testow).
+
+Sprawdzmy jeszcze co sie stanie, jesli dodatkowo zrezygnujemy z rownolicznosci grup. Zwiekszmy liczebnosc jednej grupy o n kosztem drugiej i wykonajmy testy. Narysujmy wykres ilosci testow, ktore wykryly interakcje, w zaleznosci od n.
+
+```{r}
+
+n <- 0:30
+l <- lapply(n, test.frame1)
+plot(n, l)
+
+```
+
+Okazuje sie, ze juz dla niewielkiej zmiany (okolo n=4 czyli zaburzenie dwoch grup o okolo 13% poczatkowej liczebnosci) praktycznie wszystkie testy wykazuja interakcje.
+
+Dzieje sie tak dlatego, ze test jest skonstruowany przy zalozeniu uk³adu zrównowa¿onego.
+
+Wykonajmy teraz podobne operacje dla tabeli, w ktorej nie ma liniowej zaleznosci miedzy efektami a wartoscia.
+
+```{r}
+
+A <- factor(rep(c(1,2,1,2), each=30))
+B <- factor(rep(1:2, each=60))
+
+C <- c(rep(10, 30), rep(0, 30), rep(20, 30), rep(30, 30))
+frame2 <- data.frame(A, B, C) 
+unclass(by(frame2[,3], frame2[,c(1,2)], mean))
+interaction.plot(frame2[,1], frame2[,2], frame2[,3])
+a1 <- anova(lm(C~A*B, frame2))
+a1["A:B","Pr(>F)"]
+
+```
+
+Tak jak sie spodziewalismy, nierownolegle linie wykresu i test F ponizej poziomu istotnosci stwierdzaja mocno wystepowanie interakcji.
+
+Tak jak poprzednio, zaburzymy dane czynnikiem losowym i powtorzymy eksperyment wiele razy. Sprawdzimy, ile testow wykaze interakcje.
+
+```{r}
+
+m <- 1000
+
+test.frame2 <- function(n=0) {
+  p <- c()
+  for (i in 1:m) {
+    C <- c(rnorm(30+n, mean=10), rnorm(30, mean=0), rnorm(30-n, mean=20), rnorm(30, mean=30))
+    frame <- data.frame(A, B, C)
+    a <- anova(lm(C~A*B, frame))
+    p[i] <- a["A:B","Pr(>F)"]
+  }
+  sum(p<0.05)
+}
+
+test.frame2()
+
+```
+
+Pomimo zaburzenia praktycznie wszystkie testy wskazuja na interakcje. 
+
+Zobaczmy jeszcze, jak na testy wplynie zmiana liczebnosci grup. Podobnie jak poprzednio przelozymy n obserwacji z jednej grupy do innej.
+
+```{r}
+
+n <- 0:30
+l <- lapply(n, test.frame2)
+plot(n, l)
+
+```
+
+Ten niezbyt fascynujacy wykres pokazuje, ze zmiana liczebnosci grup takze nie wplynela na werdykt testu, ktory krzyczy, ze interakcje sa obecne. 
+
+---
+
+Podsumowujac, dodanie zaburzenia losowego nie wplywa istotnie na test hipotezy, ze nie ma interakcji. Moze to swiadczyc o tym, ze test ten jest dobrze skonstruowany. Z kolei brak zrównowa¿enia uk³adu nie jest przewidziany w tescie F i nie powinno sie w ten sposob badac zachodzenia interakcji. Ogromne zaklocenie pojawia sie juz przy niewielkiej modyfikacji licznoœci grup.

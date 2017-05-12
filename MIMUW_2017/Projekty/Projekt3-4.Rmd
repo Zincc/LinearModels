@@ -1,0 +1,198 @@
+---
+title: "Projekt 3-4"
+author: "Anna Wójcik, Dawid D¹bkowski, Grzegorz Ziajka"
+date: "19 kwietnia 2017"
+output: 
+  html_document: 
+      toc: TRUE
+      number_sections: TRUE
+      toc_float: TRUE
+
+---
+
+#Podsumowanie
+W czêœciach 3,4 zbadamy wp³yw zmiennych dotycz¹cych ucznia: jego p³ci, kraju pochodzenia oraz wersji rozwi¹zywanego przez niego testu na czas rozwi¹zania poszczególnych zadañ. Wykonamy kolejno analizy jednokierunkowe dla wy¿ej wymienionych zmiennych, po których nast¹pi¹ analizy wielokierunkowe. W kolejnych krokach do modelu dodamy zmienne poprzednio zidentyfikowane jako istotne oraz spróbujemy dokonaæ selekcji zmiennych z u¿yciem metody regresji krokowej w oparciu o kryteria AIC i BIC. Finalny model(o najni¿szym AIC oraz BIC) poddamy diagnostyce oraz dokonamy wizualizacji jego parametrów.
+
+#Przygotowanie danych
+
+```{r, message = FALSE}
+library("ggplot2")
+library("dplyr")
+library("tidyr")
+library("lmtest")
+library("MASS")
+```
+
+Przygotujemy dane do analizy. Usuniemy wszystkie rekordy, w których interesuj¹ce nas zmienne s¹ NA (lub -1) oraz wylosujmy próbkê wielkoœci jednego miliona do bardziej skomplikowanych analiz.
+
+```{r, cache = TRUE}
+load("actionTimeScoreGender.rda") # dane o zadaniach z matematyki plus plec
+
+actionTimeScoreGender <- separate(actionTimeScoreGender, item_short, into = c('M', 'Q'), sep = 4)
+
+actionTimeScoreGender$M <- as.factor(actionTimeScoreGender$M)
+actionTimeScoreGender$Q <- as.factor(actionTimeScoreGender$Q)
+actionTimeScoreGender$position <- replace(actionTimeScoreGender$position, actionTimeScoreGender$position==-1, NA)
+actionTimeScoreGender$position <- droplevels(actionTimeScoreGender$position)
+
+indeksy <- quantile(actionTimeScoreGender$T, probs=c(0.01, 0.99))
+actionTimeScoreGender <- filter(actionTimeScoreGender, T <= indeksy[2])
+actionTimeScoreGender <- filter(actionTimeScoreGender, T >= indeksy[1])
+
+actionTimeScoreGender <- actionTimeScoreGender[complete.cases(actionTimeScoreGender),]
+
+actionTimeScoreGenderSample <- sample_n(actionTimeScoreGender, 1000000)
+```
+
+#Analiza jednokierunkowa
+
+PrzejdŸmy do analizy wp³ywu cech ucznia (p³eæ, kraj, kwestionariusz) na czas rozwi¹zywania zadania.
+
+##Wp³yw p³ci
+Zacznijmy od zbadaniu wp³ywu p³ci:
+
+```{r, cache = TRUE}
+ggplot(actionTimeScoreGender, aes(x = reorder(ST004D01T, T, FUN = median), y = T)) + geom_boxplot() + scale_y_sqrt()
+
+anova(lm(sqrt(T) ~ ST004D01T, data = actionTimeScoreGender))
+```
+Wyniki analizy wariancji wskazuj¹ ¿e œrednie czasy rozwi¹zywania zadañ ró¿ni¹ siê w zale¿noœci od p³ci.
+
+##Wp³yw kraju pochodzenia ucznia
+PrzejdŸmy do analizy zale¿noœci miêdzy czasem wykonania zadania a krajem pochodzenia ucznia:
+```{r, cache = TRUE}
+ggplot(actionTimeScoreGender, aes(x = reorder(CNT, T, FUN = median), y = T)) + geom_boxplot() + scale_y_sqrt() + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+anova(lm(sqrt(T) ~ CNT, data = actionTimeScoreGender))
+```
+
+Ponownie, widzimy ¿e przeciêtny czas wykonania zadania zale¿y od kraju pochodzenia ucznia.
+
+##Wp³yw wersji kwestionariusza
+
+Na koniec zbadajmy zale¿noœæ miêdzy czasem wykonania zadania a wersj¹ kwestionariusza rozwi¹zywan¹ przez ucznia:
+
+```{r, cache = TRUE}
+ggplot(actionTimeScoreGender, aes(x = reorder(BOOKID, T, FUN = median), y = T)) + geom_boxplot() + scale_y_sqrt() + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+anova(lm(sqrt(T) ~ BOOKID, data = actionTimeScoreGender))
+```
+
+Tak jak poprzednio widzimy ¿e czas wykonania zadania zale¿y od wersji kwestionariusza.
+
+#Analiza wielokierunkowa
+
+##Kraj pochodzenia ucznia + p³eæ ucznia
+
+```{r, cache = TRUE}
+anova(lm(sqrt(T) ~ ST004D01T + CNT, data = actionTimeScoreGender))
+anova(lm(sqrt(T) ~ CNT + ST004D01T, data = actionTimeScoreGender))
+```
+
+Wyniki analizy dwukierunkowej mówi¹ ¿e niezale¿nie od kolejnoœci zmienne p³eæ oraz kraj pochodzenia ucznia zachowuj¹ istotnoœæ.
+
+##P³eæ ucznia + wersja testu
+
+```{r, cache = TRUE}
+anova(lm(sqrt(T) ~ ST004D01T + BOOKID, data = actionTimeScoreGender))
+anova(lm(sqrt(T) ~ BOOKID + ST004D01T, data = actionTimeScoreGender))
+```
+
+Wyniki analizy dwukierunkowej mówi¹ ¿e niezale¿nie od kolejnoœci zmienne p³eæ oraz wersja testu zachowuj¹ istotnoœæ.
+
+##Kraj pochodzenia + wersja testu
+
+```{r, cache = TRUE}
+anova(lm(sqrt(T) ~ CNT + BOOKID, data = actionTimeScoreGender))
+anova(lm(sqrt(T) ~ BOOKID + CNT, data = actionTimeScoreGender))
+```
+
+Wyniki analizy dwukierunkowej mówi¹ ¿e niezale¿nie od kolejnoœci zmienne kraj pochodzenia ucznia oraz wersja testu zachowuj¹ istotnoœæ.
+
+##Cechy ucznia razem
+
+```{r, cache = TRUE}
+anova(lm(sqrt(T) ~ CNT + ST004D01T + BOOKID, data = actionTimeScoreGender))
+anova(lm(sqrt(T) ~ BOOKID + ST004D01T + CNT, data = actionTimeScoreGender))
+```
+
+#Model zbudowany na cechach zadania i ucznia
+
+Dodajmy zmienne poprzednio zidentyfikowane jako istotne czyli pozycja zadania w teœcie oraz numer zadania, zachowamy poprzednio znalezione przekszta³cenie zmiennej zale¿nej za pomoc¹ pierwiastka kwadratowego.
+
+```{r, cache = TRUE, cache.lazy = FALSE, EVAL = FALSE}
+m1 <- lm(sqrt(T) ~ CNT + ST004D01T + BOOKID + position + M/Q, data = actionTimeScoreGenderSample)
+```
+
+```{r, echo = FALSE}
+load("m1.rda")
+```
+Dla powy¿szego modelu wykonamy jeszcze analizê wariancji oraz spróbujemy usun¹æ zbêdne zmienne za pomoc¹ regresji krokowej "w ty³" z u¿yciem kryteriów AIC i BIC.
+```{r}
+anova(m1)
+m2 <- step(m1)
+m3 <- step(m1, k = log(nrow(actionTimeScoreGenderSample)))
+```
+Wyniki analizy wariancji oraz regresji krokowej s¹ spójne - wszystkie u¿yte w modelu zmienne s¹ istotne, dodatkowo usuniêcie którejkolwiek z niej pogarsza jakoœæ modelu wed³ug kryteriów AIC i BIC.
+
+##Diagnostyka
+```{r, cache = TRUE, echo = FALSE}
+plot(m1, which = 1:6)
+```
+<br>
+Wykres 1 - istniej¹ niewielkie problemy z jednorodnoœci¹ wariancji - werdykt negatywny co potwierdza póŸniejszy test Breuscha-Pagana. <br>
+Wykres 2 - reszty modelu nie maj¹ rozk³adu normalnego, widoczne s¹ grubsze ogony - werdykt neutralny.<br>
+Wykres 3 - widoczna jest zale¿noœæ reszt od wartoœci dopasowanych - werdykt negatywny.<br>
+Wykres 4,5,6 - miary Cook'a obserwacji s¹ niewielkie - wszystko w porz¹dku.<br>
+
+Wykonamy jeszcze test jednorodnoœci wariancji Breuscha-Pagana 
+```{r, cache = TRUE}
+bptest(m1)
+```
+Werykt negatywny - reszty wykazuj¹ niejednorodnoœæ wariancji
+##Transformacja Boxa-Coxa
+<br>
+Poniewa¿ rozk³ad reszt wybranego modelu nie jest normalny, spróbojemy zastosowaæ transformacjê Boxa-Coxa aby ten rozk³ad poprawiæ.
+
+```{r, cache = TRUE}
+mBC = boxcox(T ~ CNT + ST004D01T + BOOKID + position + M/Q, data = actionTimeScoreGenderSample)
+```
+
+```{r, echo = FALSE}
+load("mBC.rda")
+```
+
+```{r, cache = TRUE}
+lambda = mBC$x[which.max(mBC$y)]
+
+lambda
+```
+
+```{r, eval = FALSE}
+
+m4 = lm((T^lambda-1)/lambda ~ CNT + ST004D01T + BOOKID + position + M/Q, data = actionTimeScoreGenderSample)
+```
+
+```{r, echo = FALSE}
+load("m4.rda")
+```
+
+```{r, cache = TRUE, echo = FALSE, fig.height = 14}
+par(mfrow = c(2,1))
+plot(m1, which = 2)
+plot(m4, which = 2)
+```
+Powy¿ej porównanie modelu bazowego (na górze) oraz modelu z sugerowan¹ transformacj¹ Boxa-Coxa, rozk³ady reszt nie ró¿ni¹ siê znacz¹co dlatego pozostaniemy przy modelu podstawowym.
+
+##Wizualizacja wspó³czynników modelu
+```{r, echo = FALSE}
+load("CoeffTable.rda")
+CoeffTable<-CoeffTable[-1,]
+CoeffTable$Coeff<-droplevels(CoeffTable$Coeff)
+```
+
+```{r plots, cache = TRUE, fig.height = 16, fig.width = 16, fig.align = "center", echo = FALSE}
+
+ggplot(CoeffTable, aes(x = reorder(Coeff, Value, FUN = median), y = Value)) + geom_bar(stat = "identity", aes(color = Group, fill = Group)) + facet_wrap(~Group, scale = "free_x", ncol = 2)+theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+

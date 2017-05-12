@@ -1,0 +1,95 @@
+---
+title: "02_lab"
+output: html_document
+---
+
+```{r}
+install.packages('archivist')
+library(archivist)
+library(agricolae)
+library(ggplot2)
+```
+
+
+
+```{r}
+spines <- archivist::aread("pbiecek/ModeleLiniowe/repo/17df9d1fc4f43962a91b9ab14b7b8e6f")
+head(spines)
+levels(spines[,1])
+```
+
+```{r}
+boxplot(length~Group, data=spines)
+tapply(spines$length, spines$Group, var)
+```
+
+### One-Way ANOVA
+
+```{r}
+model.matrix(lm(length~Group, data=spines))
+```
+
+```{r}
+apply(model.matrix(lm(length~Group, data=spines)), 2, sum)
+```
+
+```{r}
+mouse.lm <-lm(length~Group, data=spines) 
+mouse.anova <- anova(mouse.lm)
+mouse.anova
+```
+
+```{r}
+mouse.aov <- aov(length~Group, data=spines)
+summary(mouse.aov)
+```
+
+Różnice w grupach są istotne statystycznie.
+
+### Post-Hoc
+Tukey test:
+
+```{r}
+TukeyHSD(mouse.aov)
+HSD.test(mouse.aov, "Group", console=T)
+plot(TukeyHSD(mouse.aov))
+```
+
+Significant differences: TG- vs TG+, WT+ vs TG+, WT- vs TG+. Two groups: {TG+} and {TG-, WT+, WT-}.
+
+```{r}
+LSD.test(mouse.aov, "Group", console=T)
+```
+
+Basically also two groups, but {TG-, WT+, WT-} is not homogeneous - there might be a small effect of either being transgenic or subject to treatment. 
+
+```{r}
+SNK.test(mouse.aov, "Group", console=T)
+```
+
+Two groups as in HSD test.
+
+### Test Power
+
+```{r}
+group.means <- c(0.01, 0.0, 0.0)
+group.sizes <- c(100, 100, 100)
+group.sd <- 0.1
+p.vals <- numeric(1000)
+for(r in 1:1000){
+group.data <- lapply(1:3, function(i) rnorm(n=group.sizes[i], mean=group.means[i], sd=group.sd))
+group.data <- unlist(group.data)
+group.data <- data.frame('obs'=group.data, 'group'=rep(1:3, group.sizes))
+group.anova <- anova(lm(obs~group, group.data))
+group.pval <- group.anova$Pr[1]
+p.vals[r] <- group.pval
+}
+test.power <- sum(p.vals <= 0.05)/1000
+qplot(p.vals, geom="histogram", main=test.power)
+```
+
+If there is one different group, then the test power drops when this group is smaller than the others. This is very important e.g. in medical treatment or in toxycological analyses: if the control group is larger than the test group, then the results may be unreliable and the healing (or toxic) effect may not be discovered. For example, for group centers `0.01, 0.0, 0.0` and group sizes `100, 10000, 10000` the power is `0.067`, and for the same centers but group sizes `100, 100, 100` the power is `0.103`.
+
+An interesting conclusion: Limiting the size of the control group increases the power of the test!
+
+
