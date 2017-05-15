@@ -1,0 +1,155 @@
+---
+title: "Praca domowa 8"
+author: "Aleksandra Dąbrowska"
+date: "14 May 2017"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message = FALSE)
+set.seed(2000)
+```
+
+#Zadanie
+
+```{r, include=FALSE}
+library(lme4)
+library(dplyr)
+attach(sleepstudy)
+```
+
+Korzystając ze zbioru danych `sleepstudy` omawianego na ćwiczeniach chcę estymować parametry dla efektów stałych i losowych. Wykonując symulacje, wygeneruję zmienną objaśnianą przy użyciu rozkładów normalnych dla wybranych efektów losowych. Na koniec przedstawię graficznie rozkłady dla wyżej wymienionych parametrów.
+
+#Symulacje
+
+##Parametry
+Na początku ustalamy orginalne wartości parametrów: odchyleń standardowych, średniej i nachylenia.
+
+```{r}
+n <- 180
+p <- 18
+sigma_e <- 1
+sigma_i <- 2
+sigma_s <- 0.5
+intercept <- 3
+slope <- 3
+```
+
+##Symulacje
+
+
+```{r}
+
+wspolczynniki <- function(data,n,p,sigma_e,sigma_i,sigma_s,slope, intercept){
+  sub <- unique(data$Subject)
+  int <- rnorm(p,0,sigma_i)
+  sl <- rnorm(p,0,sigma_s)
+  dane_sub <- data.frame(Subject=sub,int,sl)
+  err <- rnorm(n,0,sigma_e)
+  dane_err <- data.frame(data,err)
+  dane <- left_join(dane_err,dane_sub, by="Subject")
+  dane$y <- intercept+dane$int + (slope +dane$sl) *dane$Days +dane$err
+  
+  model <- lmer(y ~ 1 + Days + (1 | Subject) + (Days - 1 | Subject), data = dane)
+  wynik <- unname(c(t(summary(model)$coefficients[, 1]),unlist(summary(model)$varcor), summary(model)$sigma^2))
+  return(wynik)
+  
+  }
+
+
+parametry <- replicate(1000, wspolczynniki(sleepstudy,n,p,sigma_e,sigma_i,sigma_s,slope, intercept))
+
+parametry <- as.data.frame(t(parametry))
+colnames(parametry) <- c("intercept","slope","sigma_i","sigma_s","sigma_e")
+
+```
+
+
+#Wizualizacje rozkładów.
+
+##Efekty stałe
+
+Efektami stałymi w modelu jest `intercept`i nachylenie dla zmiennej `Days`.
+
+```{r}
+library(ggplot2)
+
+ggplot(parametry, aes(intercept))+
+  geom_histogram(fill="blue", col="black")+
+  theme_bw()+
+  theme(panel.border = element_blank())+
+  ggtitle("Rozkład oszacowań dla wyrazu wolnego")
+
+mean(parametry$intercept)
+intercept
+
+```
+Jak widzimy rozkład odbiega od normalnego. Średnia z wyestymowanych parametrów jest zbliżona do pierwotnie ustalonej.
+
+```{r}
+
+ggplot(parametry, aes(slope))+
+  geom_histogram(fill="blue", col="black")+
+  theme_bw()+
+  theme(panel.border = element_blank())+
+  ggtitle("Rozkład oszacowań dla nachylenia")
+
+mean(parametry$slope)
+slope
+
+```
+
+Tak jak powyżej, średnia z parametrów jest podobna do wartości `slope`.
+
+
+##Wariancje zmiennych
+
+Poniżej badamy wariancję dla wybranych efektów.
+
+```{r}
+
+ggplot(parametry, aes(sigma_e))+
+  geom_histogram(fill="blue", col="black")+
+  theme_bw()+
+  theme(panel.border = element_blank())+
+  ggtitle("Rozkład oszacowań dla wariancji błedu")
+
+mean(parametry$sigma_e)
+sigma_e
+
+```
+
+Jak widzimy, średnia z estymowanych wartości jest podobna do tej podanej na początku.
+
+```{r}
+
+ggplot(parametry, aes(sigma_i))+
+  geom_histogram(fill="blue", col="black")+
+  theme_bw()+
+  theme(panel.border = element_blank())+
+  ggtitle("Rozkład oszacowań dla wariancji wyrazu wolnego")
+
+mean(parametry$sigma_i)
+sigma_i
+
+```
+
+```{r}
+
+ggplot(parametry, aes(sigma_s))+
+  geom_histogram(fill="blue", col="black")+
+  theme_bw()+
+  theme(panel.border = element_blank())+
+  ggtitle("Rozkład oszacowań dla wariancji nachylenia")
+
+mean(parametry$sigma_s)
+sigma_s
+
+```
+
+Wariancje dla wyrazu wolnego i nachylenia różnią się od pierwotnych wartości.
