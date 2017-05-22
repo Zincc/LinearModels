@@ -254,4 +254,61 @@ Inne struktury
 
 ![](struktury.png)
 
+# 4. Pokrewieństwo
+
+Wykorzystamy ponownie zbiór danych o myszach, aby omówić zagadnienie skorelowanych pomiarów.
+
+Będziemy szukać zależności diety na parametry mięśnia u myszy.
+
+```{r, message=FALSE, warning=FALSE}
+library(lme4)
+library(PBImisc)
+library(ggplot2)
+library(coxme)
+require(kinship2)
+
+head(musculus)
+```
+
+Porównujemy dwie grupy, wydawać by się mogło, że to test dla dwóch grup.
+
+```{r}
+ggplot(musculus, aes(diet, sigma)) + 
+  geom_boxplot() + geom_jitter(color="grey") + theme_bw()
+  
+summary(lm(sigma~diet, data=musculus))
+```
+
+Ale niestety to nie takie proste.
+Porównywane osobniki są spokrewnione a spokrewnienie powoduje określoną strukturę podobieństwa genetycznego.
+
+Współczynnik pokrewieństwa to miara ilości materiału genetycznego współdzielonego przez dwa osobniki. Technicznie rzecz biorąc, mierzy on prawdopodobieństwa że dwa losowo wybrane allele są identyczne przez pochodzenie (IBD).
+
+```{r}
+gped <- with(musculus, pedigree(id, dadid, momid, sex=sex))
+plot(gped)
+
+kmat <- kinship(gped)
+kmat[1:5,1:15]
+```
+
+Taki poligenetyczny efekt można włączyć do modelu.
+Można to zrobić na kilka sposobów.
+
+```{r}
+mfit <- lmekin(sigma~diet + (1|id), data=musculus, varlist=kmat*2)
+mfit
+
+# Let's compare with
+summary(lm(sigma~diet, data=musculus))
+```
+
+Dzięki takiemu podejściu do modelowania można oszacować udział zmienności związanej z efektem poligenetycznym.
+
+```{r}
+(sigmaa <- mfit$vcoef$id)
+(sigma0 <- mfit$sigma^2)
+
+sigmaa/(sigmaa+sigma0)
+```
 
