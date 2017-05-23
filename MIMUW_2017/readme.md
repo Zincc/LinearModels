@@ -29,7 +29,7 @@ Planowana tematyka spotkań (może ulec drobnym zmianom w trakcie semestru)
 * 2017-05-09 - Dane panelowe  [notatki](https://rawgithub.com/pbiecek/LinearModels/master/MIMUW_2017/Wyklad/09_randomCoefs.html), [Lab](https://github.com/pbiecek/LinearModels/blob/master/MIMUW_2017/Lab/09lab.Rmd)
 
 * 2017-05-16 - Dowolne struktury korelacji [notatki](https://rawgithub.com/pbiecek/LinearModels/master/MIMUW_2017/Wyklad/10_spatial.html)
-* 2017-05-23 - Model regresji logistycznej i Poissona [notatki](https://rawgit.com/pbiecek/LinearModels/master/MIMUW_2017/Wyklad/10_spatial.html), [Lab](https://github.com/pbiecek/LinearModels/blob/master/MIMUW_2017/Lab/10lab.Rmd)
+* 2017-05-23 - Model regresji logistycznej i Poissona [notatki](https://rawgit.com/pbiecek/LinearModels/master/MIMUW_2017/Wyklad/10_spatial.html), [Lab](https://github.com/pbiecek/LinearModels/blob/master/MIMUW_2017/Lab/10lab.Rmd), [dane na lab](https://github.com/pbiecek/LinearModels/blob/master/MIMUW_2017/Lab/szkolyWynikiGeo.rda)
 * 2017-05-30 - Prezentacja projektu
 
 Projekt:
