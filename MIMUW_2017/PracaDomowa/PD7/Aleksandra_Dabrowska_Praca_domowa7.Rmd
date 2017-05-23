@@ -1,0 +1,174 @@
+---
+title: "Praca domowa 7"
+author: "Aleksandra Dąbrowska"
+date: "30 April 2017"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+---
+
+#Dane
+W poniższej analize będziemy korzystać ze zbioru danych `dementia` z pakietu `PBImisc`. Są to dane dostyczące demencji z kilkunastu publikacji.
+```{r, message=FALSE}
+library(PBImisc)
+library(lattice)
+library(lme4)
+library(ggplot2)
+```
+
+```{r}
+attach(dementia)
+
+head(dementia)
+summary(dementia)
+```
+
+#Interakcja wieku i płci
+
+Rozważmy dwa modele, jeden uwzględniający interakcje między zmiennymi `age` i `sex` oraz bez tej interakcji.
+
+```{r}
+model_staly <- lm(demscore~age+sex, data=dementia)
+model_interakcja <- lmer(demscore~age+sex + (1|study), data=dementia, REML = F)
+model_bez_interakcji <- lmer(demscore~age*sex+(1|study), data=dementia,REML=F)
+
+anova(model_interakcja,model_bez_interakcji)
+```
+
+Jak widzimy efekt interakcji zmiennych nie wnosi wiele do modelu. 
+W następnych krokach będziemy rozważać model bez interkacji.
+
+#Zróżnicowanie między ośrodkami
+
+```{r}
+bwplot(study~demscore, data=dementia)
+
+```
+
+Jak widzimy współczynnik `demscore` różni się między ośrodkami. Kwalifikujemy zmienną `study` jako efekt losowy, ponieważ nie mamy informacji dla wszystkich możliwych poziomów tej zmiennej.
+
+#Testy
+
+##Testy dla efektów stałych
+
+###ML
+Porównamy modele bez i z daną cechą.
+
+```{r}
+model <- lmer(demscore~sex+age + (1|study), data= dementia, REML=F)
+summary(model)
+
+modelbezSex <- update(model,.~.-sex)
+modelbezAge <- update(model,.~.-age)
+
+anova(model, modelbezAge)
+anova(model, modelbezSex)
+```
+
+Jak widzimy oba stałe komponenty okazują się istotne.
+
+###Test Walda
+
+```{r}
+#dla sex
+2*pnorm(10.79,lower.tail = FALSE)
+#dla age
+2*pnorm(10.46, lower.tail = FALSE)
+
+```
+
+Zatem dane efekty stałe są istotnie różne od zera.
+
+###Test permutacyjny
+
+```{r, message=FALSE, warning=FALSE}
+
+dementia2 <- dementia
+rozklad <- replicate(999, {
+  dementia2$age2<- sample(dementia$age)
+  model_p <- lmer(demscore ~ age2 + sex + (1 | study), data = dementia2,REML=FALSE)
+  logLik(model_p)
+  
+})
+
+(sum(rozklad>logLik(model))+1)/(1000)
+
+rozklad <- as.data.frame(rozklad)
+ggplot(rozklad, aes(rozklad))+geom_histogram()
+
+
+rozklad <- replicate(999, {
+  dementia2$sex2<- sample(dementia$sex)
+  model_p <- lmer(demscore ~ age + sex2 + (1 | study), data = dementia2,REML=FALSE)
+  logLik(model_p)
+  
+})
+
+(sum(rozklad>logLik(model))+1)/(1000)
+
+rozklad <- as.data.frame(rozklad)
+ggplot(rozklad, aes(rozklad))+geom_histogram()
+```
+
+Test permutacyjny także wskazuje istotność zmiennej `age` i `sex`.
+
+##Testy dla efektu losowego `study`
+
+###Test ilorazu wiarogodności
+
+```{r}
+logLikmieszany <- logLik(model)
+logLikstaly <- logLik(model_staly)
+
+(roznica <- as.numeric(logLikstaly-logLikmieszany))
+
+pchisq(-2*roznica, 1, lower.tail=FALSE)
+pchisq(-2*roznica, 10, lower.tail=FALSE)
+
+```
+
+Aby wykonać test LRT nie możemy użyć funkcji `anova()`, ponieważ mamy argumenty różnych klas. 
+Zarówno gdy rozważamy rozkład chi-kwadrat z 1 jak i z 10 stopniami swobody( o tyle efektów losowych różnią się te modele) widzimy, że zmienna `study` jest istotna.
+
+
+
+###Test permutacyjny
+
+```{r, warning=FALSE, message=FALSE}
+rozklad <- replicate(999, {
+  dementia2$study<- sample(dementia$study)
+  model_p <- lmer(demscore ~ age + sex + (1 | study), data = dementia2,REML=FALSE)
+  logLik(model_p)
+  
+})
+
+(sum(rozklad>logLik(model))+1)/(1000)
+
+rozklad <- as.data.frame(rozklad)
+ggplot(rozklad, aes(rozklad))+geom_histogram()
+```
+
+Test permutacyjny także wskazuje istotność tej zmiennej.
+
+##Losowość w zmiennych `age` i `sex`
+
+Na koniec porównamy modele z których usuniemy efekt płci lub wieku z efektów losowych.
+
+```{r}
+model_0 <-lmer(demscore~age+sex+(age+sex|study), data=dementia, REML=F)
+
+model_1 <- lmer(demscore~age+sex+(age|study), data=dementia, REML=F)
+
+model_2 <- lmer(demscore~age+sex+(sex|study), data=dementia, REML=F)
+
+anova(model_0,model_1)
+
+anova(model_0,model_2)
+```
+
+
+Jak widzimy efekt losowy płci jest niewielki, a efekt losowy wieku jest istotny.
+
+Stąd w końcowym modelu warto rozważyć efekt losowy wieku oraz stałe wieku i płci.

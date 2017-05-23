@@ -1,0 +1,183 @@
+---
+title: "Projekt modele liniowe i mieszane"
+subtitle: "Zadanie IV"
+author: "Aleksandra Dąbrowska, Jan Dmitruk, Magda Młynarczyk"
+date: "30 kwietnia 2017"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message=FALSE, warnings=FALSE)
+```
+
+```{r libraries, include=FALSE}
+library(broom)
+library(knitr)
+library(MASS)
+library(ggplot2)
+library(lmtest)
+```
+
+#Cel
+
+Celem czwartego etapu projektu jest wizualizacja modelu z etapu trzeciego, czyli opartego na cechach zadania i ucznia.
+
+
+#Transformacje zmiennej objaśnianej
+
+W poprzednim etapie korzystaliśmy z logarytmicznego przekształcenia zmiennej objaśnianej, sprawdzimy teraz czy transformacje z rodziny Boxa-Coxa poprawią jakość naszego modelu.
+
+```{r}
+load("dane_nowe.rda")
+
+model_4 <- lm(log(czas_zadania)~zadanie*pozycja_zadania+id_kwestionariusza+plec+mies_ur+id_kraju+wyk_m+wyk_o+gr_zawod_m+gr_zawod_o+stat_m+stat_o, data = dane_nowe)
+
+wsp <- boxcox(model_4, lambda = seq(-2, 4, 1/10))
+
+wsp <- wsp$x[which.max(wsp$y)]
+
+model_4_box <- lm((czas_zadania)^wsp~zadanie*pozycja_zadania+id_kwestionariusza+plec+mies_ur+id_kraju+wyk_m+wyk_o+gr_zawod_m+gr_zawod_o+stat_m+stat_o, data = dane_nowe)
+```
+
+```{r, include = FALSE}
+Rsq_model_4 <- summary(model_4)$r.squared
+Rsq_model_4_box <- summary(model_4_box)$r.squared
+
+rsq <- as.data.frame(rbind(Rsq_model_4, Rsq_model_4_box))
+colnames(rsq) <- "R squared"
+rownames(rsq) <- c("model_4", "model_4_box")
+```
+
+```{r}
+kable(rsq)
+```
+
+Wartość R-squared jest zdecydowanie lepsza dla wybranego wcześniej logarytmu. 
+
+#Diagnostyka modelu
+
+##Wykresy diagnostyczne dla wybranego modelu
+
+Dla `model_4` wykonujemy wykresy diagnostyczne.
+
+```{r wykresy diagnostyczne}
+plot(model_4, which = c(1:6))
+```
+
+Na wykresach widzimy, że nasz model pozytywnie przechodzi wykresy diagnostyczne z wyjątkiem wykresu `Q-Q Normal`, co może świadczyć, że reszty nie mają rozkładu normalnego. 
+
+#Testy dla modelu
+
+Dla wybranego modelu wykonujemy testy diagnostyczne.
+```{r diagnostyka}
+bptest(model_4)
+```
+
+Odrzucamy hipotezę mówiącą o jednorodności wariancji reszt.
+
+```{r}
+dwtest(model_4)
+bgtest(model_4)
+```
+
+Powyższe testy pokazują, że autokorelacja reszt rzędu 1 nie jest istotna, jednak autokorelacja rzędu wiekszego niż 1 jest już istotna.
+
+
+```{r}
+raintest(model_4)
+```
+
+Test pokazuje, że model nie jest liniowy.
+
+
+```{r, warning = FALSE}
+ks.test(model_4$residuals, "pnorm")
+```
+
+Tak jak na wykresie diagnostycznym widzimy, że rozkład reszt nie jest normalny.
+
+##Wizualizacja modelu
+
+Najpierw rozpatrzymy rozkł
+ad czasu wykonywania zadań ze względu na wykształcenie rodzica.
+
+```{r}
+dane_wyksztalcenie <- dane_nowe[,c("id_ucznia","wyk_m","wyk_o","czas_zadania")]
+
+table(dane_wyksztalcenie$wyk_m)
+
+ggplot(dane_wyksztalcenie, aes(wyk_m,czas_zadania)) + geom_boxplot()
+
+
+ggplot(dane_wyksztalcenie, aes(czas_zadania, group=wyk_m, col=wyk_m)) + geom_density()
+```
+
+```{r}
+ggplot(dane_wyksztalcenie, aes(czas_zadania, group=wyk_o, col=wyk_o)) + geom_density()
+
+```
+
+##Rozkład średniego czasu rozwiązywania zadania z podziałem na płeć.
+
+```{r, warning = FALSE}
+library(dplyr)
+srednie_plec <- dane_nowe %>% group_by(plec,zadanie) %>% summarise(srednia=mean(czas_zadania))
+
+ggplot(srednie_plec, aes(plec, srednia)) + geom_boxplot() + 
+  theme(axis.title.y = element_text("czas"))
+
+```
+
+##Ze względu na status socjoekonomiczny
+
+```{r, warning=FALSE}
+srednie_status <- dane_nowe %>% group_by(stat_m,zadanie) %>% summarise(srednia=mean(czas_zadania))
+
+ggplot(srednie_status, aes(stat_m, srednia)) + geom_boxplot() + 
+  theme(axis.title.y = element_text("czas"))
+
+```
+
+
+##Ze względu na kraj
+
+```{r, warning = FALSE}
+
+srednie_kraj <- dane_nowe %>% group_by(id_kraju,zadanie) %>% summarise(srednia=mean(czas_zadania))
+
+ggplot(srednie_kraj, aes(id_kraju, srednia)) + geom_boxplot() + 
+  theme(axis.title.y = element_text("czas"))
+
+```
+
+##Ze względu na grupę zawodową rodziców
+
+```{r, warning = FALSE}
+
+srednie_zawod <- dane_nowe %>% group_by(gr_zawod_m,zadanie) %>% summarise(srednia=mean(czas_zadania))
+srednie_zawod$typ <- substr(srednie_zawod$gr_zawod_m,1,1)
+
+typ_zawodu <- c(0:9)
+typ_zawodu <- as.data.frame(typ_zawodu)
+typ_zawodu$Name <- c("Armed Forces Occupations","Managers","Professionals","Technicians and Associate Professionals","Clerical Support Workers","Services and Sales Workers","Skilled Agricultural, Forestry and Fishery Workers","Craft and Related Trades Workers","Plant and Machine Operators and Assemblers","Elementary Occupations")
+
+colnames(typ_zawodu) <- c("typ","nazwa")
+typ_zawodu$typ<- as.character(typ_zawodu$typ)
+
+srednie_zawod <- left_join(srednie_zawod,typ_zawodu, by="typ")
+
+ggplot(srednie_zawod, aes(gr_zawod_m, srednia)) + geom_boxplot() +theme(axis.title.y = element_text("czas"))+coord_flip()
+
+srednie_typ <- srednie_zawod %>% group_by(zadanie, typ) %>% summarise(srednia= mean(srednia))
+
+ggplot(srednie_typ, aes(typ, srednia)) + geom_boxplot()
+
+```
+
+#Podsumowanie
+
+Na podstawie danych o cechach ucznia i zadania stworzyliśmy kilka modeli liniowych estymujących czas rozwiązania danego zadania z matematyki, a następnie, za pomocą kryterium AIC wybraliśmy model najlepiej dopasowany. Nasz model opiera się na 12 zmiennych objaśniających (w tym dwóch przeciętych). Wszystkie testy diagnostyczne, oprócz testu Kołomogrowa-Smirnowa, na rozkład normalny residuów, wyszły pozytywnie. Tę własność residuów zauważyliśmy także na wykresie `Q-Q`, na którym widać silną lewostronną skośność w rozkładzie residuów. 
+
