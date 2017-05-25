@@ -1,0 +1,105 @@
+---
+title: "cw8"
+author: "Dawid Dąbkowski"
+date: "09.05.2017"
+output: html_document
+---
+
+```{r, message=F, warning=F}
+library(PBImisc)
+library(lattice)
+library(lme4)
+library(nlme)
+library(ggplot2)
+```
+
+Wczytujemy dane i robimy wizualizację.
+
+```{r}
+dane <- sleepstudy
+head(dane)
+
+xyplot(Reaction ~ Days | Subject, dane, pch=19)
+```
+
+Który model stworzyć?
+
+```{r}
+model1 <- lm(Reaction ~ 0, dane)
+model2 <- lm(Reaction ~ 1, dane)
+model3 <- lm(Reaction ~ 1 + Days, dane)
+model4 <- lm(Reaction ~ poly(Days, 2), dane)
+model5 <- lmer(Reaction ~ 1 + Days + (1|Subject), dane)
+model6 <- lmer(Reaction ~ 1 + Days + (Days-1|Subject), dane)
+model7 <- lmer(Reaction ~ 1 + Days + (1+Days|Subject), dane)
+model8 <- lmer(Reaction ~ 1 + Days + (1|Subject) + (Days-1|Subject), dane)
+```
+
+Wybieramy najlepszy model spośród pierwszych 7 porównując je testem ilorazu wiarygodności.
+
+```{r}
+anova(model1,model2,model3,model4)
+```
+
+Spośród pierwszych zagnieżdżonych modeli największy istotny jest model3 więc dalej zapomnimy o pozostałych.
+
+```{r}
+anova(model7,model5,model3)
+anova(model7,model6,model3)
+```
+
+Spośród pozostałych największym istotnym modelem jest model7, zatem ten model wybierzemy.
+
+Porównamy teraz współczynniki z modelu stałego z tymi szacowanymi w modelu mieszanym nr 7 oraz nr 8 (bez korelacji).
+
+```{r}
+model_fixed = lm(Reaction ~ Days:factor(Subject) + factor(Subject) - 1, dane)
+fixedCoefs = matrix(coef(model_fixed), ncol=2)
+randomCoefs = t(t(ranef(model7)$Subject) + fixef(model7))
+randomCoefs2 = t(t(ranef(model8)$Subject) + fixef(model8))
+
+plot(fixedCoefs[,1], fixedCoefs[,2], cex=1, pch=21, lwd=3, col="red3", xlab=expression(a[i]), ylab=expression(b[i]))
+abline(v=fixef(model7)[1], col="grey", lwd=2, lty=2)
+abline(h=fixef(model7)[2], col="grey", lwd=2, lty=2)
+arrows(fixedCoefs[,1], fixedCoefs[,2], randomCoefs[,1], randomCoefs[,2], angle=15, length=0.1, lwd=1)
+points(randomCoefs[,1], randomCoefs[,2], cex=1, pch=7, lwd=2, col="blue3")
+points(randomCoefs2[,1], randomCoefs2[,2], cex=1, pch=17, lw=2, col="green3")
+```
+
+Jak widać, współczynniki z modelu 7 są w pewnym stopniu ściągnięte w okolice średnich globalnych. Współczynniki między modelem 7 oraz 8 różnią się ale nie jest to różnica duża.
+
+Stworzymy teraz eksperymentalne dane i spróbujemy odtworzyć użyte współczynniki. Zobaczymy na histogramach, jakie są rozkłady gdy doświadczenie te powtórzymy wiele razy.
+
+```{r}
+beta_i <- 100
+beta_s <- 10
+sigma_i <- 2
+sigma_s <- 0.5
+sigma_0 <- 1
+
+m <- 1000
+
+exp_data <- data.frame(beta_i=double(m),beta_s=double(m),sigma_i=double(m),sigma_s=double(m),sigma_0=double(m))
+
+for (i in 1:m){
+  dane2 <- data.frame("id" = rep(1:18, each=10), "Days" = rep(0:9, 18))
+  intercepts <- rep(rnorm(18, beta_i, sigma_i), each=10)
+  slopes <- rep(rnorm(18, beta_s, sigma_s), each=10)
+  errors <- rnorm(180, 0, sigma_0)
+  dane2$y <- intercepts + slopes*dane2$Days + errors
+  model_temp <- lmer(y ~ 1 + Days + (1|id) + (Days-1|id), dane2)
+  exp_data$beta_i[i] <- model_temp@beta[1]
+  exp_data$beta_s[i] <- model_temp@beta[2]
+  exp_data$sigma_i[i] <- model_temp@theta[1]
+  exp_data$sigma_s[i] <- model_temp@theta[2]
+  exp_data$sigma_0[i] <- attr(VarCorr(model_temp), "sc")
+}
+
+ggplot(exp_data, aes(x=beta_i)) + geom_histogram(bins=60) + geom_vline(xintercept=beta_i, size=2)
+ggplot(exp_data, aes(x=beta_s)) + geom_histogram(bins=60) + geom_vline(xintercept=beta_s, size=2)
+ggplot(exp_data, aes(x=sigma_i)) + geom_histogram(bins=60) + geom_vline(xintercept=sigma_i, size=2)
+ggplot(exp_data, aes(x=sigma_s)) + geom_histogram(bins=60) + geom_vline(xintercept=sigma_s, size=2)
+ggplot(exp_data, aes(x=sigma_0)) + geom_histogram(bins=60) + geom_vline(xintercept=sigma_0, size=2)
+```
+
+Rozkłady eksperymentalnych parametrów są wycentrowane wokół faktycznych wartości. Histogramy przypominają rozkład normalny.

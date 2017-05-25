@@ -19,7 +19,7 @@ Zacznijmy od struktury modeli mieszanych (z efektami stałymi i losowymi).
 
 # Jedna składowa
 
-Rozgrzewska: zbiór danych `milk`. 
+Rozgrzewka: zbiór danych `milk`. 
 
 Dziesięć krów, po cztery pomiary dla każdej. Pytanie: jaka jest średnia produkcja mleka na krowę.
 
@@ -43,11 +43,11 @@ Spróbujmy bardziej złożonego modelu.
 
 ```{r, warning=FALSE, message=FALSE}
 library(lme4)
-(model1 <- lmer(milk.amount~(1|cow), data=milk))
+(model1 <- lmer(milk.amount~1+(1|cow), data=milk))
 (model3 <- lmer(milk.amount~(1|cow), data=milk, REML=FALSE))
 ```
 
-Let's compare predicted average milk production per cow.
+Produkcja mleka na krowę.
 
 ```{r, warning=FALSE, message=FALSE}
 ocenaMR = unlist(ranef(model1)) + fixef(model1)
@@ -72,12 +72,14 @@ Zbudujmy model z trzema efektami.
 
 ```{r, warning=FALSE, message=FALSE}
 (model1 <- lmer(milk~btn3a1+lactation+(1|cow.id), data=milkgene))
+summary(model1)
 ```
 
 Wyciągamy predyktory dla efektów losowych.
 
 ```{r, warning=FALSE, message=FALSE, fig.width=7, fig.height=10}
 u = ranef(model1, condVar =TRUE)
+summary(model1)
 dotplot(u)
 ```
 
@@ -109,6 +111,7 @@ anova(modelWithBTN1, modelWithoutBTN1)
 ```{r, warning=FALSE, message=FALSE}
 N = 1000
 logs = replicate(N, logLik(lmer(milk~sample(btn3a1)+lactation+(1|cow.id), data=milkgene, REML=FALSE)))
+hist(logs,100)
 mean(logs > logLik(modelWithBTN1))
 ```
 

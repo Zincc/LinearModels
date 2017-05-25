@@ -1,0 +1,165 @@
+---
+title: "Projekt modele liniowe i mieszane"
+subtitle: "Zadanie VI"
+author: "Aleksandra Dąbrowska, Jan Dmitruk, Magda Młynarczyk"
+date: "12 maja 2017"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: true
+
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning = FALSE)
+```
+
+```{r, include = FALSE, message=FALSE}
+library(dplyr)
+library(ggplot2)
+library(MASS)
+library(knitr)
+
+setwd("C:\\Users\\Magda\\Documents\\GitHub\\Projekt-Pisa2015\\Faza 3 i 4")
+load("dane_nowe.rda")
+```
+
+#Przedstawienie problemu
+
+W fazie 6 przeprowadzimy dodatkowe transformacje zmiennych objaśnianych i objaśniających naszego dotychczasowego modelu. Opiszemy też zmiany przeprowadzone już we wcześniejszych fazach projektu.
+
+#Podsumowanie
+
+Rozpatrzyliśmy następujące transformacje zmiennej objaśnianej:
+
+* Transformacja Boxa-Coxa [3.2](#3.2)
+
+* Transformacja logarytmiczna oraz transformacja logarytmiczna z przesunięciem [3.3](#3.3)
+
+Wybraną przez nas transformacją jest logarytmiczne przekształcenie czasu z parametrem przesunięcia równym $\beta = 50$. Swoją decyzję oparliśmy na podstawie współczynnika R squared [3.4](#3.4).
+
+Opisaliśmy także wykonane przez nas w poprzednich fazach przekształcenia zmiennych objaśniających:
+
+* `zadanie` - informacja na temat numeru zadania [4.1](#4.1)
+
+* `stat_m`, `stat_o` - informacja na temat statusu socjoekonomicznego matki i ojca, odpowiednio [4.2](#4.2)
+
+* `gr_zawod_m`, `gr_zawod_o` - informacja na temat grupy zawodowej w obrębie której pracuje matka i ojciec [4.3](#4.3)
+
+Dzięki tym zmianom, zarówno dane jak i model stały się bardziej przejrzyste, a dzięki transformacjom danych model liniowy jest lepiej dopasowany.
+
+#Transformacje czasu
+
+##Agregowanie czasu zadania ze względu na podpunkt
+W pierwszej fazie naszego projektu zdedcydowaliśmy modelować czas rozwiązywania całego zadania przez ucznia, pomimo posiadania informacji na temat czasu rozwiązywania poszczególnych podpunktów. Aby było to możliwe, ze zmiennej `kod_zadania` wyciągnęliśmy numer podpunktu danego zadania [4.1](#4.1), a następnie posumowaliśmy czasy ze wszystkich podpunktów danego zadania (pełny kod: https://github.com/pbiecek/LinearModels/blob/master/MIMUW_2017/Projekty/A.Dabrowska-%20J.Dmitruk-%20M.Mlynaryczyk/Raport_zadanie_1.Rmd).
+
+```{r,eval=FALSE}
+dane6 <- dane6 %>% group_by(CNTSTUID,zadanie) %>% summarize(sum(czas))
+```
+
+Ze względu na nieliniowość naszego modelu rozpatrywaliśmy już w poprzednich fazach różne transformacje czasu. W fazie 4 porównywaliśmy transformacje $\log(t)$ z transformacjami typu $t^{\alpha}$. Zdecydowaliśmy, że modelowanie logarytmu czasu jest lepsze. Przeprowadźmy jeszcze raz to rozumowanie, uwzględniając interakcje rozważane w poprzedniej fazie.
+
+##Transformacje Boxa-Coxa <a name = "3.2"></a>
+
+```{r}
+Model <- lm(czas_zadania~zadanie*pozycja_zadania+id_kwestionariusza+mies_ur+id_kraju*plec+wyk_m*wyk_o+gr_zawod_m+gr_zawod_o+stat_m+stat_o, data = dane_nowe)
+
+wsp <- boxcox(Model)
+wsp <- wsp$x[which.max(wsp$y)]
+
+BoxModel <- lm(I(((czas_zadania)^wsp-1)/wsp)~zadanie*pozycja_zadania+id_kwestionariusza+mies_ur+id_kraju*plec+wyk_m*wyk_o+gr_zawod_m+gr_zawod_o+stat_m+stat_o, data = dane_nowe)
+
+```
+
+##Transformacje logrytmiczne <a name = "3.3"></a>
+Na początku wykonamy zwykła transformację logarytmiczną czasu. Następnie rozważymy także wybór parametru przesunięcia w transformacji logarytmicznej przy pomocy funkcji `logtrans`{MASS}
+
+```{r}
+LogModel <- lm(log(czas_zadania)~zadanie*pozycja_zadania+id_kwestionariusza+mies_ur+id_kraju*plec+wyk_m*wyk_o+gr_zawod_m+gr_zawod_o+stat_m+stat_o, data = dane_nowe)
+
+beta <- logtrans(Model, alpha = seq(0.5, 80, 0.5))
+beta <- beta$x[which.max(beta$y)]
+
+LogTransModel <- lm(log(czas_zadania + beta)~zadanie*pozycja_zadania+id_kwestionariusza+mies_ur+id_kraju*plec+wyk_m*wyk_o+gr_zawod_m+gr_zawod_o+stat_m+stat_o, data = dane_nowe)
+```
+
+##Wybór optymalnej transformacji <a name = "3.4"></a>
+
+Porównamy powyższe modele między sobą za pomocą parametru R squared. 
+```{r}
+rsq <- c("Model", "LogModel", "BoxModel", "LogTransModel")
+rsq <- cbind(rsq, c(summary(Model)$r.squared, summary(LogModel)$r.squared,summary(BoxModel)$r.squared, summary(LogTransModel)$r.squared))
+
+colnames(rsq) <- c("nazwa modelu", "R squared")
+kable(rsq)
+```
+
+Okazuje się, że najwyższą wartość parametru R squared dostajemy dla modelu z przesunięciem w transformacji logarytmicznej. 
+
+#Transformacje zmiennych objaśnianych
+
+Opiszemy najpierw transformacje, które przeprowadziliśmy w poprzednich fazach.
+
+##Wydobycie informacji o numerze zadania <a name = "4.1"></a>
+W pierwotnych danych (`dane_matematyka`) dysponowaliśmy jedynie zmienną `kod_zadania`, zawierającą w sobie informacje zarówno o numerze zadania jak i o podpunkcie. Modelując czas całego zadania potrzebna nam była informacja o numerze zadania.
+```{r,eval=FALSE}
+dane_matematyka$zadanie <- substr(dane_matematyka$item_short,2,4)
+```
+
+##Faktoryzacja statusu socjoekonomicznego <a name = "4.2"></a>
+Jedną z rozważanych przez nas zmiennych, był status socjoekonomiczny matki i ojca danego ucznia. Zmienna ta przyjmowała wartości z przedziału [0,100]. Postanowiliśmy pogrupować je na pięć kategorii za pomocą funkcji `cut2`{Hmisc}
+
+```{r, eval = FALSE, error = TRUE}
+library(Hmisc)
+dane_kwestionariusze$stat_m <- cut2(dane_kwestionariusze$stat_m,c(20,40,60,80))
+dane_kwestionariusze$stat_o <- cut2(dane_kwestionariusze$stat_o,c(20,40,60,80))
+```
+
+##Przydzielenie grup zawodowych <a name = "4.3"></a>
+
+Z pierwotnych danych posiadaliśmy wiedzę na temat zawodów wykonywanych przez rodziców. Ze względu na dużą liczbę (428 poziomów) możliwych wartości tych zmiennych, postanonwiliśmy przydzielić je do odpowienich grup zawodowych zgodnie z klasyfikacją ISCO-08. Na skutek tej transformacji otrzymaliśmy zmienne o 10 poziomach.
+
+```{r, eval = FALSE, error = TRUE}
+#wczytujemy kody poszczególnych zawodów.
+kody_zawody <- readxl::read_excel("index08-draft.xlsx")
+kody_zawody <- kody_zawody[,c(1,3)]
+
+#wczytujemy kody grup zawodow
+grupy_zawodow <- read.csv("occupations_groups.csv", sep=";",h=T)
+
+#z danych z kwestionariusza wyciagniemy informacje o grupie zawodow w ktorych sa rodzice
+dane_kwestionariusze$gr_zawod_m <- substr(dane_kwestionariusze$zawod_m,1,2)
+dane_kwestionariusze$gr_zawod_o <- substr(dane_kwestionariusze$zawod_o,1,2)
+
+#teraz do danych dodajemy nazwe grupy
+colnames(grupy_zawodow)[1] <- "gr_zawod_m"
+grupy_zawodow$gr_zawod_m <- as.character(grupy_zawodow$gr_zawod_m)
+grupy_zawodow[1,1] <- "01"
+grupy_zawodow[2,1] <- "02"
+grupy_zawodow[3,1] <- "03"
+
+dane_kwestionariusze2 <- left_join(dane_kwestionariusze,grupy_zawodow, by="gr_zawod_m")
+dane_kwestionariusze2$Name <- droplevels(dane_kwestionariusze2$Name)
+colnames(dane_kwestionariusze2)[12] <- "n_zawod_m"
+
+colnames(grupy_zawodow)[1] <- "gr_zawod_o"
+dane_kwestionariusze2 <- left_join(dane_kwestionariusze2,grupy_zawodow, by="gr_zawod_o")
+dane_kwestionariusze2$Name <- droplevels(dane_kwestionariusze2$Name)
+
+colnames(dane_kwestionariusze2)[13] <- "n_zawod_o"
+```
+
+##Przekształcone dane
+Po powyższych przekształceniach zmienne niezależne prezentują się następująco:
+```{r, echo=FALSE}
+dane <- dane_nowe[,c(1:11)]
+dane <- unique(dane)
+head(dane[c(1,4:7,10:11)])
+```
+
+
+
+
+

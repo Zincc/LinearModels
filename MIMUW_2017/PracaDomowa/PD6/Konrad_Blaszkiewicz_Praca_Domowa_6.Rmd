@@ -1,0 +1,289 @@
+---
+title: "Wybór modelu"
+author: "Przemyslaw Biecek"
+---
+
+# Plan na spotkanie
+
+```{r, include=FALSE}
+library(MASS)
+library(lmtest)
+library(partykit)
+library(agricolae)
+library(e1071)
+library(tidyverse)
+library(forcats)
+library(caret)
+library(broom)
+```
+Pobierz plik `df.rda` i wykonaj na nim poniższe zadania https://github.com/pbiecek/LinearModels/blob/master/MIMUW_2017/Lab/df.rda
+
+1. Wykonaj analizę jednokierunkową wariancji ze zmienną `V1`. Ustaw poziom `B` jako poziom referencyjny.
+```{r}
+load("df.rda")
+summary(df)
+```
+```{r}
+ggplot(df, aes(V1,y)) + geom_boxplot()
+```
+
+```{r}
+summary(lm(formula = y~V1, data = df))
+```
+Przed przepoziomowaniem zmiennej V1, tylko poziom B statystycznie istotnie wpływa na y.
+```{r}
+df <- df %>% mutate(V1 = fct_relevel(V1, "B"))
+m <- lm(formula = y~V1, data = df)
+summary(m)
+```
+```{r}
+anova(m)
+```
+
+Zmienna V1 statystycznie istotnie objaśnia zmienna y. 
+
+2. Połącz w zmiennych `V1` i `V2` poziomy `B` i `C` ze sobą, a następnie wykonaj test weryfikujący istotność interakcji.
+```{r}
+ggplot(df, aes(V2, y)) + geom_boxplot()
+```
+
+```{r}
+summary(lm(y~V2, data = df))
+```
+Pierwszys test bez połaczonych poziomów nie wykazuje ze zmienna V2 istotnie objaśnia y.
+```{r}
+unified <- df %>%
+  mutate(V1 = fct_collapse(V1, BC = c("B", "C")),
+         V2 = fct_collapse(V2, BC = c("B", "C")))
+m_v1_v2_no_interaction <- lm(y ~ V1 + V2, data = unified)
+m_v1_v2_interaction <- lm(y ~ V1 * V2, data = unified)
+anova(m_v1_v2_no_interaction, m_v1_v2_interaction)
+```
+```{r}
+interaction.plot(unified$V2,unified$V1, unified$y)
+```
+Test F wskazuje na to że interakcja miedzy zmiennymi V1 i V2 nie opisuje istotnie y.
+
+3. Dla zmiennej `V1` porównaj wyniki dla różnych kontrastów, przynajmniej Helmerta, poly i sum.
+
+```{r}
+m_helmert <- lm(y~V1, data = df, contrasts = list(V1=contr.helmert(3)))
+m_poly <- lm(y~V1, data = df, contrasts = list(V1=contr.poly(3)))
+m_sum <- lm(y~V1, data = df, contrasts = list(V1=contr.sum(3)))
+```
+```{r}
+head(model.matrix(m_helmert))
+summary(m_helmert)
+```
+```{r}
+head(model.matrix(m_poly))
+summary(m_poly)
+```
+```{r}
+head(model.matrix(m_sum))
+summary(m_sum)
+```
+
+
+4. Wykonaj test post hoc dla zmiennej `V3`. Które poziomy różnią się pomiędzy sobą?
+
+Na poczatek przeprowadzmy analizę wariancji dla zmiennej V3.
+```{r}
+m.V3 <- lm(y ~ V3, data = df)
+summary(m.V3)
+```
+Nastepnie test HSD Tukey'a
+
+```{r}
+plot(TukeyHSD(aov(m.V3)))
+```
+```{r}
+HSD.test(aov(m.V3), "V3", console = TRUE)
+```
+Test sugeruje że nie ma istotnych różnic pomiedzy grupami
+```{r}
+LSD.test(aov(m.V3), "V3", console = TRUE)
+```
+Test LSD sugeruje istnienie 3 grup.
+
+```{r}
+scheffe.test(aov(m.V3), "V3", console = TRUE)
+```
+Test Scheffe'go ponownie nie wykazuje istatnych róznic w srednich.
+
+5. Zweryfikuj istotność zależności od zmiennej `V4`
+```{r}
+ggplot(df, aes(V4, y)) + geom_point() + geom_smooth(method = "lm")
+```
+
+```{r}
+m.V4 <- lm(y~V4, data = df)
+anova(m.V4)
+```
+```{r}
+summary(m.V4)
+```
+Wynik testu F wskazuje na to że nie ma istotnej zależnosci od zmiennej V4.
+
+6. Czy istotna jest interakcja pomiędzy V4 a V1? Jak pokazać tę zależność.
+```{r}
+m.V1_V4 <- lm(y ~ V1+V4, data = df)
+m.V1_V4_inter <- lm(y~V1*V4, data = df)
+
+anova(m.V1_V4,m.V1_V4_inter)
+```
+Wynik testu wskazuje na to że zależność interacji zmiennych V1 i V4 nie jest statystycznie istotna.
+```{r}
+ggplot(df, aes(x = V4, y = y)) + geom_point() + geom_smooth(method = "lm") + facet_wrap(~V1, scales = "free_y")
+```
+7. Zweryfikuj zależność od zmiennej `V5`. A co jeżeli ta zależność nie jest liniowa? Sprawdź zależność od wielomianu stopnia 3.
+```{r}
+ggplot(df, aes(V5, y)) + geom_point()
+```
+
+```{r}
+m.V5 <- lm(y ~ V5, data = df)
+anova(m.V5)
+```
+```{r}
+m.V5_poly2 <- lm(y ~ poly(V5,2), data = df)
+m.V5_poly3 <- lm(y ~ poly(V5,3), data = df)
+```
+
+```{r}
+anova(m.V5_poly2)
+```
+```{r}
+anova(m.V5_poly2, m.V5_poly3)
+```
+```{r}
+summary(m.V5_poly3)
+```
+Zarówno wykres rozkładu zmiennej V5 w stostunku do y jak i test wskazują na zależnośc od wielomianu stopnia drugie zmiennej.
+
+8. Zbuduj nową zmienną `NV := V4 - 2*V5`. Zbadaj związek z tą zmienną.
+```{r}
+df_NV <- df %>%
+        mutate(NV = V4 - 2*V5)
+```
+```{r}
+ggplot(df_NV, aes(NV, y)) + geom_point()
+```
+```{r}
+m.NV  <- lm(y~NV, data = df_NV)
+anova(m.NV)
+```
+
+```{r}
+m.NV2  <- lm(y~poly(NV,2), data = df_NV)
+anova(m.NV2)
+```
+Po stworzeniu nowej zmiennej będącej kombinacją liniową zmiennych V4 i V5 ponownie możemy stwierdzić istotną zależność od wielomianu stopnia zmiennej NV
+
+9. Wybierz model optymalny według kryterium BIC - zrób przegląd pełny wszystkich modeli.
+```{r}
+vars <- matrix(c(colnames(df[,-1]), "poly(V5,2)"))
+coefs <- (bincombinations(length(vars))==1)[-1,]
+
+form_from_coefs <- function(coefs_row) {
+  paste("y~", paste(vars[coefs_row], collapse="+"))
+} 
+forms <- apply(coefs, 1, form_from_coefs) 
+params <- forms %>%
+          map_df(~ glance(lm(as.formula(.x), data = df)))
+
+```
+```{r}
+best_formula <- as.formula(forms[which.min(t(params[,"BIC"]))])
+best_model <- lm(best_formula, data = df)
+print(best_formula)
+print(summary(best_model))
+```
+
+
+10. Wybierz model optymalny według kryterium AIC - użyj funkcji step. 
+```{r}
+step.aic.backward <- stepAIC(lm(y~.+poly(V5,2),data=df),direction = "backward", trace = TRUE)
+step.aic.backward
+```
+```{r}
+min.model = lm(y ~ 1, data=df)
+biggest <- formula(lm(y~. + poly(V5,2),df))
+step.aic.forward <- stepAIC(min.model, direction = "forward", scope = biggest)
+```
+11. Wykonaj diagnostykę reszt. Czy są obserwacje odstające/wpływowe?
+```{r}
+best_model <- lm(y ~ V1 + V4 + poly(V5, 2), data = df)
+plot(best_model, which = 1:6)
+```
+Wykresy diagnostyczne wskazują kilka obserwacji odstających - 53, 127, 140 ktorę mogę miec znaczący wpływ na model.
+```{r}
+bptest(best_model)
+```
+Test wskazuje na to że nie podstaw do odrzuceniu hiptezy o jednorodności reszt.
+```{r}
+dwtest(best_model)
+```
+
+```{r}
+bgtest(best_model)
+```
+Test nie wykazuje istanienia znaczącej korelacji rzedu 1 miedzy resztami.
+```{r}
+shapiro.test(best_model$residuals)
+```
+Nie odrzucamy hipotezy o rozkładzie normalnym reszt.
+
+```{r}
+raintest(best_model)
+```
+Nie ma podstaw do odrzucenia hipotezy o liniowosci.
+```{r}
+resettest(best_model)
+```
+
+12. Zweryfikuj istotność interakcji `V6` i `V7`.
+```{r}
+model_v6_v7_no_interactions <- lm(y~V6+V7, data = df)
+model_v6_v7_interactions <- lm(y~V6*V7, data = df)
+anova(model_v6_v7_no_interactions, model_v6_v7_interactions)
+anova(model_v6_v7_interactions)
+```
+Iterackje pomiędzy zmiennymi V6 i V7 nie mają  wpływu na
+
+13. Porównaj wyniki z wynikami funkcji `ctree` pakiet `partykit`.
+```{r}
+model_ctree <- ctree(formula(best_model), data = df)
+model_ctree
+plot(model_ctree)
+```
+Funkcja ctree wskazuje że najwięskze znaczenie ma zmienna V1, grupach B i A,C co jest zgodne z naszymi wczesniejszymi obserwacjami.
+
+14. Użyj funkcji `optim()` aby znaleźć oceny współczynników z kryterium do optymalizacji `abs(y - Xb)`
+```{r}
+y = df[,1]
+dummies <- caret::dummyVars(~V1 + V2 + V3, data =df)
+X = model.matrix(y~., data =df)
+k = dim(X)[2]
+beta_0 = matrix(rep(0, k))
+
+l1_loss <- function(beta) {
+  sum(abs(y - X %*% beta))
+}
+
+optim(beta_0, l1_loss)
+```
+
+15. Funkcja `rlm` z pakietu `MASS` wykonuje regresję odporną. Sprawdź jak wpłynie ona na ocenę współczynników.
+```{r}
+robust_model <-rlm(formula(best_model), data = df)
+summary(robust_model)
+anova(robust_model)
+tidy(best_model)
+tidy(robust_model)
+```
+```{r}
+plot(robust_model, which= 1:6)
+```
+
+Współczynniki dla modelu odpornego na odchylenia są zbliżone do modelu liniowego. Większą roznice, rzedu 20% wartosic wspolczynnika można zaobserwać dla zmiennej V5(czynnik liniowy)

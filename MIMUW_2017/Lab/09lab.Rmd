@@ -1,0 +1,17 @@
+---
+title: "Efekty losowe"
+author: "Przemyslaw Biecek"
+---
+
+## Zbiór danych `sleepstudy`
+
+W pakiecie `lme4` znajduje się bardzo ciekawy zbiór danych `sleepstudy`  pozwalający na porównanie wpływu deprawacji snu na czas reakcji.
+
+*The average reaction time per day for subjects in a sleep deprivation study. On day 0 the subjects had their normal amount of sleep. Starting that night they were restricted to 3 hours of sleep per night. The observations represent the average reaction time on a series of tests given each day to each subject.*
+
+Używając tego zbioru danych:
+
+- Narysuj zależność pomiędzy czasem reakcji `Reaction` i liczbą dni o obniżonej ilości snu `Days` dla każdej osoby niezależnie.
+- Zbuduj model z losowymi współczynnikami dla zmiennych  `Reaction` i `Days`.
+- Wyłuskaj współczynniki nachylenia dla modelu z efektami stałymi i losowymi. Przedstaw statystyki opisowe dla tych współczynników.
+

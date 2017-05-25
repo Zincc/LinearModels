@@ -1,0 +1,114 @@
+---
+title: Czynniki wpływające na czas rozwiązywania zadań z matematyki PISA 2015 - etap
+  II
+author: "Zofia Nawalany, Michał Karlicki, Agata Gruszczyńska"
+date: "27 marca 2017"
+output: html_document
+---
+#Spis treści  
+[1.Cel](#1.Cel)  
+[2.Streszczenie etapu II](#2.Streszczenie etapu II)  
+[3.Testy](#3.Testy)  
+[4.Analiza reszt](#4.4.Analiza reszt)  
+[5.Wizualizacje](#5.Wizualizacja)  
+[6.Podsumowanie](#7.Wybór modelu)  
+
+
+#1.Cel <a name="1.Cel"></a>
+Celem drugiego etapu jest diagnostka i wizualizacja wybranego modelu, opisującego zależność między czasem całego zadania a jego pozycją z zagnieżdżonym ID zadania.
+
+#2.Streszczenie etapu II <a name="2.Streszczenie etapu II"></a>
+Zaprezentowane poniżej metody diagnostyczne modelu wykazały, że model niestety nie odzwierciedla rzeczywistych danych w statysfakcjonującym stopniu. Należałoby skonstruować kolejne modele.
+
+
+#3.Testy i wykresy diagnostyczne <a name="3.Testy"></a>
+
+```{r, echo=FALSE, warning=F, message=F}
+#load("/Users/michalkarlicki/Downloads/actionTimeScoreMath.rda")
+#load("/Users/Gruszka/Documents/STUDIA/BioinformatykaUW/sem2_Bioinf/Biecek/Projekt R/actionTimeScoreMath.rda")
+#load("/home/zinc/studia/modele liniowe i mieszane/actionTimeScoreMath.rda")
+load("data.Rda")
+
+library(foreign)
+library(outliers)
+library(ggplot2)
+library(nortest)
+library(lmtest)
+library(broom)
+library(dplyr)
+library(agricolae)
+
+```
+#Wybrany model 
+```{r, echo=FALSE}
+model_liniowy3 <- lm(log(question_time)~position/item,data=atsm2)
+plot(model_liniowy3, which = c(1:6))
+
+```
+
+```{r}
+bptest(model_liniowy3)
+```
+#Sprawdzenie jednorodności wariancji reszt:
+```{r}
+dwtest(model_liniowy3)
+bgtest(model_liniowy3)
+```
+#Test sprawdzający liniowość modelu: 
+
+Test potwierdza, że model jest liniowy.
+```{r}
+raintest(model_liniowy3)
+```
+
+
+#Anova
+Odchylenia wariancji są istotne dla wybranego modelu. 
+```{r}
+anova(model_liniowy3)
+```
+#Testy Posthock
+Poniższe testy wskazują, że występują cztery grupy dla czterech pozycji w kwestionariuszu. Nie występują pomiędzy nimi jednak duże różnice.
+
+```{r}
+HSD.test(model_liniowy3, "position", console=TRUE)
+SNK.test(model_liniowy3, "position", console=TRUE)
+LSD.test(model_liniowy3, "position", p.adj="bonferroni", console = TRUE)
+```
+
+
+#4.Analiza reszt <a name="4.Analiza reszt"></a>
+Poniżej wykonane testy statystyczne na normalość reszt jednoznacznie wskazują na to, że reszty nie są normalne. 
+
+```{r, warning=F, message=F}
+residuals <- rbind(data.frame(residuals = rstandard(model_liniowy3), typ = "Standard residuals"), data.frame(residuals = rstudent(model_liniowy3), typ = "Student's residuals"))
+
+ad.test(residuals$residuals[residuals$typ == "Standard residuals"])
+ad.test(residuals$residuals[residuals$typ == "Student's residuals"])
+
+ks.test(model_liniowy3$residuals, "pnorm")
+```
+#5.Wizualizacja modelu <a name="5.Wizualizacja"></a>
+Zależność pozycji zadania od czasu jego rozwiązywania.
+```{r}
+dane_wykres2 <- augment(model_liniowy3)
+g <- ggplot(dane_wykres2, aes(item, .fitted)) +geom_line() 
+g <- g + theme(legend.position="none", axis.text.x = element_text(angle = 90, hjust = 1))
+g
+ggplot(dane_wykres2, aes(position, log.question_time.)) + geom_boxplot()
+
+boxplot(log(question_time)~item,data=atsm2, xlab="question_id", ylab="log(question_time)")
+boxplot(log(question_time)~position/item,data=atsm2, xlab="position/question_id", ylab="log(question_time")
+
+data_2 <- atsm2 %>% group_by(position,CNTSTUID) %>% summarize(sum(question_time))
+colnames(data_2)[3]<- "czas"
+
+ggplot(data_2, aes(position, czas)) +geom_boxplot()
+```
+
+#6.Podsumowanie <a name="7.Wybór modelu"></a>
+
+Szeroko zakrojona diagnostyka modelu wykazała, że wybrany przez nas model zbudowany na zmiennych: position (pozycja w kwestionariuszu) oraz item (zadanie) w etapie pierwszym niestety nie odzwierciedla danych idealnie. Można zauważyć jednak, że występuje zależność pomiędzy czasem wykonywania zadań, a pozycją w kwestionariuszu (zadanie na ostatniej pozycji jest rozwiązywane najkrócej). Nie są to jednak duże róźnice. Tak więc konieczna byłaby konstrukacja i testowanie kolejnych modeli. 
+
+
+
