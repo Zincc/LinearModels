@@ -1,0 +1,117 @@
+---
+title: "Projekt 6"
+author: "Anna Wójcik, Dawid D¹bkowski, Grzegorz Ziajka"
+date: "27 maja 2017"
+output: 
+  html_document: 
+      toc: TRUE
+      number_sections: TRUE
+      toc_float: TRUE
+---
+#Podsumowanie
+
+W tym etapie próbowaliœmy przeprowadziæ transformacjê zmiennych objaœniaj¹cych BOOKID i CNT. Pogrupowanie etapów nie przynios³o oczekiwanych skutków dlatego w kolejnych etapach opieraæ siê bêdziemy na dotychczasowym modelu.
+
+#Przygotowanie danych
+
+```{r,message=FALSE, warning=FALSE}
+library("agricolae")
+library("tidyr")
+library("lmtest")
+library("MASS")
+library("dplyr")
+library("party")
+``` 
+```{r, cache = TRUE}
+load("C:/Users/Anna/Downloads/actionTimeScoreGender.rda") # dane o zadaniach z matematyki plus plec
+
+actionTimeScoreGender <- separate(actionTimeScoreGender, item_short, into = c('M', 'Q'), sep = 4)
+
+actionTimeScoreGender$M <- as.factor(actionTimeScoreGender$M)
+actionTimeScoreGender$Q <- as.factor(actionTimeScoreGender$Q)
+actionTimeScoreGender$position <- replace(actionTimeScoreGender$position, actionTimeScoreGender$position==-1, NA)
+actionTimeScoreGender$position <- droplevels(actionTimeScoreGender$position)
+
+indeksy <- quantile(actionTimeScoreGender$T, probs=c(0.01, 0.99))
+actionTimeScoreGender <- filter(actionTimeScoreGender, T <= indeksy[2])
+actionTimeScoreGender <- filter(actionTimeScoreGender, T >= indeksy[1])
+
+actionTimeScoreGender <- actionTimeScoreGender[complete.cases(actionTimeScoreGender),]
+
+actionTimeScoreGenderSample <- sample_n(actionTimeScoreGender, 500000)
+```
+
+#Przypomnienie wyjœciowego modelu
+
+Model, który wybraliœmy w poprzednich etapach zawiera szeœæ jakoœciowych zmiennych objaœniaj¹cych.
+
+```{r,cache=TRUE}
+model1=lm(sqrt(T) ~position + M/Q+ST004D01T*CNT+ST004D01T*BOOKID, data = actionTimeScoreGenderSample)
+```
+
+W tym etapie rozwa¿ymy czy transformacje zmiennych objaœniaj¹cych poprawi¹ model pod wzglêdem kryteriów informacyjnych.
+
+Zbadamy zmienne, których wiele poziomów nie wydaje siê byæ istotnych w powy¿szym modelu, czyli zmienne CNT (kraj) i BOOKID (indeks podrêcznika).
+
+#Testy post hoc
+
+Mo¿emy podejrzewaæ, ¿e niektóre poziomy zmiennych CNT i BOOKID nie s¹ istotnie ró¿ne. Wtedy pogrupowanie poziomów mog³oby zmniejszyæ kryteria AIC i BIC.
+
+```{r}
+model=aov(sqrt(T)~position + M/Q+ST004D01T*CNT+ST004D01T*BOOKID, actionTimeScoreGenderSample)
+HSD.test(model,"BOOKID",console=TRUE)
+HSD.test(model,"CNT",console=TRUE)
+```
+
+
+Testy HSD Tukeya potwierdzaj¹, ¿e wiele poziomów nie ró¿ni siê statystycznie miêdzy sob¹.
+
+#Grupowanie poziomów
+
+Spróbujmy pogrupowaæ poziomy u¿ywaj¹c drzew decyzyjnych.
+
+```{r}
+tree1=ctree(sqrt(T)~BOOKID,data=actionTimeScoreGenderSample,controls=ctree_control(mincriterion = 0.95,maxdepth=4))
+```
+```{r}
+tree2=ctree(sqrt(T)~CNT,data=actionTimeScoreGenderSample,controls=ctree_control(mincriterion = 0.95))
+```
+
+
+```{r}
+AIC(model1)
+BIC(model1)
+```
+```{r}
+actionTimeScoreGenderSample$BOOKID_GROUP<-as.factor(tree1@get_where())
+
+model<-lm(sqrt(T) ~position + M/Q+ST004D01T*BOOKID_GROUP+ST004D01T*CNT, data = actionTimeScoreGenderSample)
+
+AIC(model)
+BIC(model)
+ 
+```
+```{r}
+actionTimeScoreGenderSample$CNT_GROUP<-as.factor(tree2@get_where())
+
+model<-lm(sqrt(T) ~position + M/Q+ST004D01T*BOOKID+ST004D01T*CNT_GROUP, data = actionTimeScoreGenderSample)
+
+AIC(model)
+BIC(model)
+ 
+```
+```{r}
+actionTimeScoreGenderSample$BOOKID_GROUP<-as.factor(tree1@get_where())
+actionTimeScoreGenderSample$CNT_GROUP<-as.factor(tree2@get_where())
+
+model<-lm(sqrt(T) ~position + M/Q+ST004D01T*BOOKID_GROUP+ST004D01T*CNT_GROUP, data = actionTimeScoreGenderSample)
+
+AIC(model)
+BIC(model)
+ 
+```
+
+Model, w którym pogrupowane zosta³y tylko kraje pochodzenia ucznia ma najlepsze kryterium BIC. Najlepszy pod wzglêdem AIC jest model bez wprowadzonych zmian. Ostatecznie do dalszej analizy wykorzystamy wczeœniej przygotowany model1.
+
+
+
