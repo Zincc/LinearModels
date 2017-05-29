@@ -280,6 +280,12 @@ Klasyczne efekty stałe
 ```{r}
 summary(lm(BPRS.T2 ~ NUM.HOSP, eunomia))
 summary(lm(BPRS.T2 ~ NUM.HOSP+AGE+GENDER, eunomia))
+
+
+modelFull = lmer(BPRS.T2~NUM.HOSP + (1|CENTRE13) + (1|ICD10), data= eunomia, REML=T)
+modelwithoutINT = update(modelFull, . ~ . -1)
+modelwithoutNUM = update(modelFull, . ~ . -NUM.HOSP)
+anova(modelwithoutINT, modelFull)
 ```
 
 ### Więcej zmiennych

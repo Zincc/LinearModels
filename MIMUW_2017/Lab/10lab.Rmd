@@ -1,0 +1,23 @@
+---
+title: "Analiza przestrzenna"
+author: "Przemyslaw Biecek"
+---
+
+## Zbiór danych `thick`
+
+Pobierz zbiór danych `thick` o grubości złóż węgla w różnych miejscach (zbiór danych z dokumentacji SAS PROC VARIOGRAM).
+
+```
+library(nlme)
+spdata <- read.table("https://stats.idre.ucla.edu/stat/r/faq/thick.csv", header = T, sep = ",")
+head(spdata)
+```
+
+Kolumny `east` i `north` opisują współrzędne miejsc w których wykonywano pomiary.
+
+1) Zbuduj model mieszany uwzględniający korelację przestrzenną pomiędzy pomiarami.
+2) Przeprowadź test dla istotności składowej losowej.
+3) Przeprowadź test Mantela dla wariogramu.
+
+W razie problemów skorzystać ze strony
+https://stats.idre.ucla.edu/r/faq/how-do-i-fit-a-variogram-model-to-my-spatial-data-in-r-using-regression-commands/

@@ -1,0 +1,147 @@
+---
+title: "Projekt modele liniowe i mieszane"
+subtitle: "Zadanie V"
+author: "Aleksandra Dąbrowska, Jan Dmitruk, Magda Młynarczyk"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: true
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning = FALSE)
+```
+
+```{r libraries, include=FALSE}
+library(plyr)
+library(ggplot2)
+library(dplyr)
+
+```
+
+#Przedstawienie problemu
+
+W piątej fazie zadania rozpatrzymy interakcje występujące między zmiennymi objaśniającymi wybranymi przez nas w poprzednich etapach. Następnie zmodyfikujemy nasz model, uwzględniając istotne interakcje oraz zbadamy ich wpływ na jakość modelu.
+
+Zauważmy, że w poniższych rozważaniach modelujemy logarytm czasu zadania. 
+
+#Podsumowanie
+Spośród naszych zmiennych zainteresowały nas interakcje między efektami:
+
+* zadania i jego pozycji w kwestionariuszu [3.1](#3.1)
+
+* wykształcenia matki i ojca [3.2](#3.2)
+
+* kraju i płci ucznia [3.3](#3.3)
+
+Zauważyliśmy, że w każdym wypadku taka interakcja istnieje. Po dodaniu ich do modelu okazało się, że wszystkie one są statystycznie istotne.
+
+#Analiza interakcji
+
+W celu znalezienia interakcji w naszym modelu przedstawimy i omówimy wykresy interakcji efektów wybranych zmiennych.
+
+##Interakcja między zadaniem, a jego pozycją w kwestionariuszu <a name = "3.1"></a>
+Wydaje nam się, że czas rozwiązania danego zadania może zależeć od jego pozycji w kwestionariuszu. Na przykład uczeń poświęca więcej czasu na długie zadanie na pierwszej pozycji, a pomija je na ostatnich. 
+
+```{r dane, include = FALSE}
+setwd("C:/Users/O/Desktop/Moje dokumenty/GitHub/Projekt-Pisa2015/faza 5")
+load("dane_nowe.rda")
+```
+
+Przypomnijmy na początku rozważany przez nas model w 3 i 4 fazie projektu.
+```{r}
+model <- lm(log(czas_zadania)~zadanie+pozycja_zadania+id_kwestionariusza+plec+mies_ur+id_kraju+wyk_m+wyk_o+gr_zawod_m+gr_zawod_o+stat_m+stat_o, data = dane_nowe)
+
+```
+
+Na poniższym wykresie przedstawimy rozważaną interakcję między numerem zadania, a jego pozycją w kwestionariuszu. 
+```{r}
+int1 <- ddply(dane_nowe,.(zadanie,pozycja_zadania),summarise, val = mean(log(czas_zadania)))
+
+ggplot(dane_nowe, aes(x = factor(zadanie), y = log(czas_zadania), colour = pozycja_zadania)) + 
+    geom_point(data = int1, aes(y = val)) +
+    geom_line(data = int1, aes(y = val, group = pozycja_zadania)) +   
+    theme_bw()+
+    theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+    xlab("Numer zadania")+
+    ylab("Średni czas zadania")+
+    ggtitle("Interakcje między pozycją zadania a jego numerem")
+```
+
+Na powyższym wykresie widzimy, że dla niektórych zadań występują interakcje. Przyjrzyjmy się wybranym zadaniom, aby lepiej je zwizualizować.
+
+```{r}
+dane_nowe_okrojone <- filter(dane_nowe, dane_nowe$zadanie %in% c("603", "800", "803", "828", "905", "906", "915", "909"))
+
+int2 <- ddply(dane_nowe_okrojone,.(zadanie,pozycja_zadania),summarise, val = mean(log(czas_zadania)))
+
+ggplot(dane_nowe_okrojone, aes(x = factor(zadanie), y = log(czas_zadania), colour = pozycja_zadania)) + 
+    geom_point(data = int2, aes(y = val)) +
+    geom_line(data = int2, aes(y = val, group = pozycja_zadania)) + 
+    theme_bw()+theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+    xlab("Numer zdania")+
+    ylab("Średni czas zadania")+
+    ggtitle("Interakcje między pozycją zadania a jego numerem")
+```
+
+Faktycznie, zadanie 906 na pozycji 1 i 3, a więc rozwiązywane w pierwszych częściach testu, jest rozwiązywane dłużej, niż na pozycjach 2 i 4. Nie jest tak dla zadań 603, 905, 909 i 915.
+
+Brak równoległości między krzywymi dla poszczególnych zadań wskazują na występowanie interakcji. Zauważmy, że interakcję tę znaleźliśmu już w poprzednich fazach, dlatego jest ona już uwzględniona w naszym modelu z fazy 4.
+
+##Interakcja między wykształceniem matki i ojca <a name = "3.2"></a>
+
+Sprawdźmy, czy wysokie wykształcenie zarówno matki i ojca ma wpływ na czas rozwiązywania zadania przez ich dziecko? Czy zmienia się to, kiedy jedno z rodziców ma niższe wykształcenie, albo oboje mają niskie wykształcenie?
+
+Poziom wykształcenia oznaczany jest od najniższego do najwyższego kolejno: None,1,2,3,4,5,6 i odpowiadają one poziomom ISCED. 
+
+```{r}
+dane_nowe$wyk_m <-  relevel(dane_nowe$wyk_m,ref="None")
+dane_nowe$wyk_o <-  relevel(dane_nowe$wyk_o,ref="None")
+
+int3 <- ddply(dane_nowe, .(wyk_m, wyk_o),summarise, val = mean(log(czas_zadania)))
+
+ggplot(dane_nowe, aes(x = factor(wyk_m), y = log(czas_zadania), colour = wyk_o)) + 
+    geom_point(data = int3, aes(y = val)) +
+    geom_line(data = int3, aes(y = val, group = wyk_o)) + 
+    theme_bw()+theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+    xlab("Wykształcenie matki")+
+    ylab("Średni czas zadania")+
+    ggtitle("Interakcje między wykształceniem matki i ojca ")
+
+```
+Przecinające się wykresy świadczą o istnieniu interakcji.
+Zauważamy największe interakcje w przypadku, gdy przynajmniej jeden z rodziców ma niskie wykształcenie. Nie widzimy natomiast, żeby wysokie wykształcenie jednego rodzica istotnie wpływało na czas rozwiązywania zadania (dla wyższych wykształceń linie mają podobne nachylenia). 
+
+##Interakcja pomiędzy krajem a płcią <a name = "3.3"></a>
+
+Czy w zależności od kraju widzimy różnice w wykształceniu dziewczynek i chłopców? Czy możliwe jest, że istnieje kraj, w którym dziewczynki albo chłopcy mają gorsze możliwości edukacji?
+```{r}
+int4 <- ddply(dane_nowe, .(plec, id_kraju),summarise, val = mean(log(czas_zadania)))
+
+ggplot(dane_nowe, aes(x = factor(id_kraju), y = log(czas_zadania), colour = plec)) + 
+    geom_point(data = int4, aes(y = val)) +
+    geom_line(data = int4, aes(y = val, group = plec)) + 
+    theme_bw()+theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+    xlab("Kraj")+
+    ylab("Średni czas zadania")+
+    ggtitle("Interakcje między krajem a płcią")
+```
+
+Powyższy wykres jest wyjątkowo interesujący - w Finlandii widzimy największa różnicę w czasie rozwiązywania zadania między chłopcami a dziewczynkami (a przypuszczaliśmy, że to może wydarzyć się w Turcji, co się po części potwierdziło). Na podstawie wykresu stwierdzamy istnienie interakcji.
+
+#Istotność interakcji w modelu
+
+W celu zbadania istotności powyższych interakcji, modyfikujemy nasz model. Następnie wykonując analizę wariancji sprawdzamy istotnośćrozważanych powyżej interakcji.
+
+```{r}
+model2 <- lm(log(czas_zadania)~zadanie*pozycja_zadania+id_kwestionariusza+mies_ur+id_kraju*plec+wyk_m*wyk_o+gr_zawod_m+gr_zawod_o+stat_m+stat_o, data = dane_nowe)
+
+anova(model2)
+```
+
+Wyniki funkcji `anova()` pokazują, że wszystkie badane interakcje są istotne dla naszego nowego modelu. 
+
+
