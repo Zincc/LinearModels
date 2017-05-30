@@ -1,0 +1,92 @@
+---
+title: "Projekt modele liniowe i mieszane"
+subtitle: "Prezentacja wyników"
+author: "Aleksandra Dąbrowska, Jan Dmitruk, Magda Młynarczyk"
+date: "28 maja 2017"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: true
+
+---
+```{r, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning = FALSE)
+```
+
+
+```{r, include = FALSE, message=FALSE}
+library(dplyr)
+library(ggplot2)
+library(MASS)
+library(knitr)
+
+setwd("C:\\Users\\Magda\\Documents\\GitHub\\Projekt-Pisa2015\\Faza 3 i 4")
+load("dane_nowe.rda")
+```
+
+#Problematyka zadania
+Głównym celem naszego projektu było stworzenie modelu liniowego na podstawie danych PISA 2015 o wynikach uczniów z zadań z matematyki. Zmienną objaśnianą miał być czas rozwiązywania zadania. Do jej opisu mogliśmy użyć wielu różnych zmiennych objaśniających, opisujących zarówno pojedyncze zadania jak i samych uczniów.
+
+#Uzyskane wyniki
+Podczas 6 faz projektu udało nam się:
+
+* Wykonać eksplorację danych
+
+* Stworzyć wiele modeli liniowych, uwzględniając różne transformacje zmiennej objaśnianej i zmiennych objaśniających  
+
+* Wykonać diagnostykę i wizualizację powyższych modeli
+
+* Porównać między sobą powyższe modele oraz wybrać model optymalny
+
+W końcowym wybranym przez nas modelu, estymujemy **logarytm czasu** wykonywania zadania na podstawie poniższych predyktorów:
+
+* interakcja numeru zadania i jego pozycji w kwestionariuszu
+
+* numer kwestionariusza
+
+* miesiąc urodzenia ucznia
+
+* interakcja kraju pochodzenia i płci ucznia
+
+* interakcja wykształcenia matki i ojca
+
+* grupa zawodowa matki i ojca
+
+* status socjoekonomiczny matki i ojca
+
+Niestety, ostateczny model nie przechodzi wszystkich testów na liniowość.
+
+
+#Wybrane zagadnienia 
+Zaprezentujemy tutaj najciekawsze zagadnienia jakie napotkaliśmy podczas pracy nad naszym projektem. Wytłumaczymy także,  jak je zanalizowaliśmy, jak sobie z nimi poradziliśmy i jakie wyciągneliśmy na ich podstawie wnioski. 
+
+##Zbyt duży rozmiar danych
+Z powodu dużego rozmiaru dostępnych danych oraz zbyt małej mocy obliczeniowej naszych komputerów zmuszeni byliśmy ograniczyć się do pewnego podzbioru obserwacji. Najrozsądniejszym rozwiązaniem wydaje nam się ograniczenie się do kilku krajów. Rozpatrujemy więc wszystkie obserwacje dla uczniów z następujących państw: **Polska, USA, Turcja, Niemcy, Finlandia**
+
+##Modelowanie czasu rozwiązywanie podpunktu vs. czasu rozwiązywania całego zadania
+W pierwotnych danych mielismy informacje, o czasie rozwiązywania konkretenego podpunktu danego zadania przez danego ucznia. Okazało się jednak, iż po zagregowaniu danych do czasu rozwiązywania całego zadania nasze modele miały duże lepsze współczynniki dopasowania.
+
+##Interakcja wykształcenia matki i ojca
+Zastanawialiśmy się, w jakim stopniu wykształcenie rodziców może wpływać wyniki w nauce ich dzieci. Czy wysokie lub niskie wykształcenie jednego z rodziców zmienia możliwości edukacyjne dzicka?
+
+```{r echo=FALSE, out.width='100%'}
+setwd("C:\\Users\\Magda\\Documents\\GitHub\\Projekt-Pisa2015\\prezentacja końcowa")
+knitr::include_graphics('interactionPlot2.png')
+```
+
+Na podstawie wykresu możemy stwierdzić, że największe interakcje występują, gdy przynajmniej jeden z rodziców ma niskie wykształcenie. Nie widzimy natomiast, żeby wysokie wykształcenie jednego rodzica istotnie wpływało na czas rozwiązywania zadania (dla wyższych wykształceń linie mają podobne nachylenia).
+
+
+##Interakcja kraju i płci
+Bardzo ciekawa wydaje nam się być istotność interakcji płci i kraju. Z naszych rozważań przed modelowaniem, zastanawialiśmy się czy w niektórych krajach możliwe jest, że dziewczynki lub chłopcy mają gorsze możliwości edukacji przez co ich wyniki będą gorsze. Spośród pięciu krajów, które rozpatrywaliśmy, podejrzewaliśmy, że może tak zdarzyć się w Turcji. Oczekiwaliśmy jednak, że w pozostałych krajach taka zależność nie wystąpi.
+
+```{r echo=FALSE, out.width='100%'}
+knitr::include_graphics('interactionPlot1.png')
+```
+
+Z powyższego wykresu wynika jednak, że największe różnice wśród czasów rozwiązywania zadań przez chłopców i dziewczynki występują w Finlandii, i kraj ten różni się znacząco pod tym względem od np. Niemiec (w których ta różnica jest najmniejsza).
+
+#Możliwe dalsze prace
+W następnych krokach powinniśmy skupić się na dwóch ważnych kwestiach. Przede wszystkim, powinniśmy rozpatrzeć inne transformacje zmiennej objaśnianej i zmiennych objaśniających tak, aby otrzymany model wykazywał właściwości modelu liniowego. Następnie warto byłoby uwzględnić w naszym modelu efekty losowe.
