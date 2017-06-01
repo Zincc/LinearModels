@@ -1,0 +1,204 @@
+---
+title: "Projekt 5"
+author: "Anna Wójcik, Dawid D¹bkowski, Grzegorz Ziajka"
+date: "19 maja 2017"
+output: 
+  html_document: 
+      toc: TRUE
+      number_sections: TRUE
+      toc_float: TRUE
+---
+#Podsumowanie
+
+W tym etapie zbadaliœmy interakcje miêdzy zmiennymi kraj i p³eæ oraz indeks podrêcznika i p³eæ. Okaza³o siê, ¿e obie interakcje wystêpuj¹ i s¹ statystycznie istotne. W kolejnych etapach bêdziemy rozwa¿aæ zatem model powiêkszony o te interakcje.
+
+#Przygotowanie danych
+
+```{r,message=FALSE, warning=FALSE}
+library("forcats")
+library("tidyr")
+library("lmtest")
+library("MASS")
+library("ggplot2")
+library("dplyr")
+library("plyr")
+``` 
+```{r, cache = TRUE}
+load("C:/Users/Anna/Downloads/actionTimeScoreGender.rda") # dane o zadaniach z matematyki plus plec
+
+actionTimeScoreGender <- separate(actionTimeScoreGender, item_short, into = c('M', 'Q'), sep = 4)
+
+actionTimeScoreGender$M <- as.factor(actionTimeScoreGender$M)
+actionTimeScoreGender$Q <- as.factor(actionTimeScoreGender$Q)
+actionTimeScoreGender$position <- replace(actionTimeScoreGender$position, actionTimeScoreGender$position==-1, NA)
+actionTimeScoreGender$position <- droplevels(actionTimeScoreGender$position)
+
+indeksy <- quantile(actionTimeScoreGender$T, probs=c(0.01, 0.99))
+actionTimeScoreGender <- filter(actionTimeScoreGender, T <= indeksy[2])
+actionTimeScoreGender <- filter(actionTimeScoreGender, T >= indeksy[1])
+
+actionTimeScoreGender <- actionTimeScoreGender[complete.cases(actionTimeScoreGender),]
+
+actionTimeScoreGenderSample <- sample_n(actionTimeScoreGender, 500000)
+```
+
+#Przypomnienie wyjœciowego modelu
+
+Bêdziemy badaæ ewentualne wystêpowanie interakcji miêdzy zmiennymi objaœniaj¹cymi przygotowanego w poprzednich etapach modelu m1.
+
+```{r, cache = TRUE}
+m1=lm(sqrt(T) ~ CNT + ST004D01T + BOOKID + position + M/Q, data = actionTimeScoreGenderSample)
+```
+
+#Wykres interakcji miêdzy krajem a p³ci¹
+
+Najpierw sprawdzimy na wykresie interakcje miêdzy zmienn¹ CNT oznaczaj¹c¹ kraj ucznia oraz zmienn¹ ST004D01T oznaczaj¹c¹ p³eæ. Zmienna kraj ma 59 poziomów, wiêc rozbijemy dane na trzy czêœci, ¿eby móc lepiej zaobserwowaæ ewentualne interakcje.
+
+```{r}
+actionTimeScoreGenderFemale<- filter(actionTimeScoreGender, actionTimeScoreGender$ST004D01T %in% "Female")
+a<-ddply(actionTimeScoreGenderFemale, .(CNT), summarize, time=mean(sqrt(T)))
+
+b <- a[order(a$time),] 
+chr=as.character(b$CNT)
+new <- filter(actionTimeScoreGender, actionTimeScoreGender$CNT %in% b$CNT[1:20])
+tst <- ddply(new,.(CNT,ST004D01T),summarise, time = mean(sqrt(T)))
+
+p=ggplot(new, aes(x = fct_relevel(CNT,chr), y = sqrt(T), colour = ST004D01T)) + 
+    geom_point(data = tst, aes(y = time)) +
+    geom_line(data = tst, aes(y = time, group = ST004D01T)) + 
+    theme_bw()+theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+    xlab("Kraj")+
+    ylab("Œredni czas zadania")+
+    ggtitle("Wykres interakcji miêdzy krajem a p³ci¹ ucznia ")+ scale_colour_discrete(name="P³eæ")
+
+print(p)
+
+new <- filter(actionTimeScoreGender, actionTimeScoreGender$CNT %in% b$CNT[21:40])
+tst <- ddply(new,.(CNT,ST004D01T),summarise, time = mean(sqrt(T)))
+
+p=ggplot(new, aes(x = fct_relevel(CNT,chr), y = sqrt(T), colour = ST004D01T)) + 
+    geom_point(data = tst, aes(y = time)) +
+    geom_line(data = tst, aes(y = time, group = ST004D01T)) + 
+    theme_bw()+theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+    xlab("Kraj")+
+    ylab("Œredni czas zadania")+
+    ggtitle("Wykres interakcji miêdzy krajem a p³ci¹ ucznia ")+ scale_colour_discrete(name="P³eæ")
+
+print(p)
+
+new <- filter(actionTimeScoreGender, actionTimeScoreGender$CNT %in% b$CNT[41:58])
+tst <- ddply(new,.(CNT,ST004D01T),summarise, time = mean(sqrt(T)))
+
+p=ggplot(new, aes(x = fct_relevel(CNT,chr), y = sqrt(T), colour = ST004D01T)) + 
+    geom_point(data = tst, aes(y = time)) +
+    geom_line(data = tst, aes(y = time, group = ST004D01T)) + 
+    theme_bw()+theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+    xlab("Kraj")+
+    ylab("Œredni czas zadania")+
+    ggtitle("Wykres interakcji miêdzy krajem a p³ci¹ ucznia ")+ scale_colour_discrete(name="P³eæ")
+
+print(p)
+
+  
+```
+
+Po przyjrzeniu siê powy¿szym wykresom mo¿emy podejrzewaæ, ¿e interakcje mog¹ byæ istotne w tym modelu. Widzimy, ¿e ró¿nice w œrednich czasach rozwi¹zania zadania przez kobiety i przez mê¿czyzn zale¿¹ od kraju pochodzenia, co prowadzi do braku równoleg³oœci na wykresie. Dla wielu krajów ró¿nice te s¹ niewielkie, np. BRA, CHL, DEU, dla innych s¹ bardzo du¿e, np. ARE, QAT, ISR.
+
+#Wykres interakcji miêdzy indeksem podrêcznika a p³ci¹
+
+Teraz sprawdŸmy na wykresie interakcje miêdzy zmienn¹ BOOKID oznaczaj¹c¹ indeks podrêcznika oraz zmienn¹ ST004D01T oznaczaj¹c¹ p³eæ. Zmienna BOOKID ma 44 poziomy, wiêc rozbijemy dane na dwie czêœci, ¿eby móc lepiej zaobserwowaæ ewentualne interakcje.
+
+```{r}
+actionTimeScoreGenderFemale<- filter(actionTimeScoreGender, actionTimeScoreGender$ST004D01T %in% "Female")
+a<-ddply(actionTimeScoreGenderFemale, .(BOOKID), summarize, time=mean(sqrt(T)))
+
+b <- a[order(a$time),] 
+chr=as.character(b$BOOKID)
+new <- filter(actionTimeScoreGender, actionTimeScoreGender$BOOKID %in% b$BOOKID[1:22])
+tst <- ddply(new,.(BOOKID,ST004D01T),summarise, time = mean(sqrt(T)))
+
+p=ggplot(new, aes(x = fct_relevel(BOOKID,chr), y = sqrt(T), colour = ST004D01T)) + 
+    geom_point(data = tst, aes(y = time)) +
+    geom_line(data = tst, aes(y = time, group = ST004D01T)) + 
+    theme_bw()+theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+    xlab("Indeks podrêcznika")+
+    ylab("Œredni czas zadania")+
+    ggtitle("Wykres interakcji miêdzy indeksem podrêcznika a p³ci¹ ucznia ")+ scale_colour_discrete(name="P³eæ")
+print(p)
+
+
+new <- filter(actionTimeScoreGender, actionTimeScoreGender$BOOKID %in% b$BOOKID[23:44])
+tst <- ddply(new,.(BOOKID,ST004D01T),summarise, time = mean(sqrt(T)))
+
+p=ggplot(new, aes(x = fct_relevel(BOOKID,chr), y = sqrt(T), colour = ST004D01T)) + 
+    geom_point(data = tst, aes(y = time)) +
+    geom_line(data = tst, aes(y = time, group = ST004D01T)) + 
+    theme_bw()+theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+    xlab("Indeks podrêcznika")+
+    ylab("Œredni czas zadania")+
+    ggtitle("Wykres interakcji miêdzy indeksem podrêcznika a p³ci¹ ucznia ")+ scale_colour_discrete(name="P³eæ")
+print(p)
+  
+```
+
+Tak jak w poprzednim przypadku mo¿emy podejrzewaæ, ¿e i ta interakcja mo¿e byæ istotne. Widzimy, ¿e ró¿nice w œrednich czasach rozwi¹zania zadania przez kobiety i przez mê¿czyzn zale¿¹ od indeksu podrêcznika, co prowadzi do braku równoleg³oœci na wykresie. Dla podrêczników o numerach 43, 44, 45 ró¿nice te s¹ doœæ du¿e, a dla podrêcznikóW 73, 75, 76 praktycznie niezauwa¿alne.
+
+#Analiza wariancji modelu z interakcj¹ miêdzy krajem a p³ci¹
+
+U¿yjemy teraz funkcji anova, ¿eby sprawdziæ istotnoœæ interakcji miêdzy krajem a p³ci¹.
+
+```{r,cache=TRUE}
+anova(lm(sqrt(T) ~ ST004D01T*CNT, data = actionTimeScoreGenderSample))
+anova(lm(sqrt(T) ~ CNT*ST004D01T, data = actionTimeScoreGenderSample))
+```
+
+Analiza wariancji potwierdza nasze przypuszczenia. Interakcja ST004D01T:CNT jest istotna na poziomie ni¿szym ni¿ 2.2e-16.
+
+#Analiza wariancji modelu z interakcj¹ miêdzy indeksem podrêcznika a p³ci¹
+
+U¿yjemy teraz funkcji anova, ¿eby sprawdziæ istotnoœæ interakcji miêdzy indeksem podrêcznika a p³ci¹.
+
+```{r,cache=TRUE}
+anova(lm(sqrt(T) ~ ST004D01T*BOOKID, data = actionTimeScoreGenderSample))
+anova(lm(sqrt(T) ~ BOOKID*ST004D01T, data = actionTimeScoreGenderSample))
+```
+
+Tym razem analiza wariancji równie¿ potwierdza istotnoœæ interakcji ST004D01T:BOOKID.
+
+#Analiza wariancji ostatecznego modelu
+
+SprawdŸmy teraz model, który zawiera obie z analizowanych przez nas interakcji.
+
+```{r,cache=TRUE}
+anova(lm(sqrt(T) ~ ST004D01T*CNT+ST004D01T*BOOKID, data = actionTimeScoreGenderSample))
+anova(lm(sqrt(T) ~ ST004D01T*BOOKID+ST004D01T*CNT, data = actionTimeScoreGenderSample))
+```
+
+Obie interkacje wydaj¹ siê byæ istotne, wiêc sk³aniamy siê ku wyborowi modelu, który poza dotychczasowymi sk³adnikami bêdzie zawiera³ jeszcze interakcje miêdzy krajem a p³ci¹ oraz indeksem podrêcznika i p³ci¹.
+
+#Porównanie modeli
+
+
+```{r,cache=TRUE}
+model01=lm(sqrt(T) ~position + M/Q+CNT+ST004D01T*BOOKID, data = actionTimeScoreGenderSample)
+```
+```{r,cache=TRUE}
+model02=lm(sqrt(T) ~position + M/Q+CNT+ST004D01T*CNT+BOOKID, data = actionTimeScoreGenderSample)
+```
+```{r,cache=TRUE}
+model1=lm(sqrt(T) ~position + M/Q+ST004D01T*CNT+ST004D01T*BOOKID, data = actionTimeScoreGenderSample)
+```
+
+Porównajmy jeszcze ze sob¹ analizowane modele i sprawdŸmy czy dodanie interakcji istotnie poprawia model.
+
+```{r,cache=TRUE}
+anova(m1,model01)
+anova(m1,model02)
+anova(model01,model1)
+anova(model02,model1)
+anova(m1,model1)
+```
+
+Modele z jedn¹ z wybranych interakcji s¹ istotnie lepsze od modelu m1 bez interakcji.
+Model z dwoma interakcjami jest istotnie lepszy od tego z tylko jedn¹ interakcj¹, wiêc wybieramy model1 do dalszych analiz.
+

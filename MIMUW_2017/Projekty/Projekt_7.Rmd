@@ -1,0 +1,168 @@
+---
+title: "Projekt etap 7"
+author: "Anna Wójcik, Dawid Dąbkowski, Grzegorz Ziajka"
+date: "14 maja 2017"
+output:
+  html_document: 
+      toc: TRUE
+      number_sections: TRUE
+      toc_float: TRUE
+
+---
+
+#Wstęp
+
+W poprzednich częściach projektu badaliśmy modele liniowe z efektami stałymi. Były to: id zadania, id podpunktu, pozycja w kwestionariuszu oraz płeć, kraj i kwestionariusz. W tym punkcie ponownie dokonamy wyboru modelu, lecz tym razem niektóre ze zmiennych potraktujemy jako efekty losowe. Wskazanie odpowiednich efektów losowych poprawi jakość modelu przez zredukowanie dużej liczby parametrów, bez większej straty w interpretacji wyników. Dzięki zastosowaniu modelu mieszanego będziemy w stanie zbudować model oparty na wielu zmiennych objaśniających, przy zastosowaniu próbki danych o wielkości porównywalnej z całością danych (około 37,5% całości).
+
+#Przygotowanie danych
+
+```{r, message = FALSE, warning = FALSE}
+#library("ggplot2")
+library("dplyr")
+library("tidyr")
+#library("lmtest")
+#library("MASS")
+library("lme4")
+```
+
+Przygotujemy dane do analizy. Usuniemy wszystkie rekordy, w których interesujące nas zmienne są NA (lub -1) oraz wylosujmy próbkę wielkości jednego miliona do bardziej skomplikowanych analiz.
+
+```{r}
+load("actionTimeScoreGender.rda") # dane o zadaniach z matematyki plus plec
+
+actionTimeScoreGender <- separate(actionTimeScoreGender, item_short, into = c('M', 'Q'), sep = 4)
+
+actionTimeScoreGender$M <- as.factor(actionTimeScoreGender$M)
+actionTimeScoreGender$Q <- as.factor(actionTimeScoreGender$Q)
+actionTimeScoreGender$position <- replace(actionTimeScoreGender$position, actionTimeScoreGender$position==-1, NA)
+actionTimeScoreGender$position <- droplevels(actionTimeScoreGender$position)
+
+indeksy <- quantile(actionTimeScoreGender$T, probs=c(0.01, 0.99))
+actionTimeScoreGender <- filter(actionTimeScoreGender, T <= indeksy[2])
+actionTimeScoreGender <- filter(actionTimeScoreGender, T >= indeksy[1])
+rm(indeksy)
+
+actionTimeScoreGender <- actionTimeScoreGender[complete.cases(actionTimeScoreGender),]
+
+actionTimeScoreGenderSample <- sample_n(actionTimeScoreGender, 1000000)
+```
+
+#Wybór efektów losowych
+
+Spójrzmy na kilka losowych rekordów ze wczytanych danych.
+
+```{r}
+sample_n(actionTimeScoreGender[,c(2,3,5,6,7,11,12)], 12)
+```
+
+W kolejnych podpunktach przeanalizujemy poszczególne zmienne objaśniające. Spojrzymy na ilość ich poziomów i na to, co o nich wiemy. Dla porządku, w ocenie wyboru efektów losowych uwzględnimy kolejno: kompletność listy efektów, liczbę efektów, zależność liczby efektów od liczby obserwacji oraz ocenę wartości efektu.
+
+## Id zadania
+
+```{r}
+length(levels(actionTimeScoreGender$M))
+```
+
+Mamy 41 poziomów zmiennej id zadania. Są to wszystkie zadania, które były rozwiązywane przez uczniów, jest to jednak i tak tylko niewielka próbka możliwych zadań z matematyki. Poziomów tych jest też dość dużo. Nie ma zależności liczby poziomów od liczby obserwacji. Niekoniecznie jednak interesują nas oceny wszystkich poszczególnych poziomów, gdyż nie będziemy wnikać w treść poszczególnych zadań.
+
+Podsumowując, zmienną id zadania potraktujemy jako efekt losowy, gdyż zadania są tu tylko pewnym sposobem sprawdzenia wiedzy i nie są to wszystkie możliwe pytanie, które można zadać uczniom. Oszczędzimy też w ten sposób dużo parametrów.
+
+## Id podpunktu
+
+```{r}
+length(levels(actionTimeScoreGender$Q))
+```
+
+Poziomów mamy 4 i są to wszystkie możliwe poziomy w obrębie zadań, które przygotowało badanie PISA. Poziomy te są jednak zagnieżdżone w zadaniach, zatem w obecnej sytuacji musimy je potraktować jako zagnieżdżony efekt losowy. Poziomów nie jest dużo i nie zależą od ilości obserwacji. Może nam również zależeć na ocenie poszczególnych podpunktów (jako że znaczenie może mieć kolejność podpunktów). Nie jest to jednak tak oczywiste, gdyż podpunkty nie zawsze są numerowane od 1 do 4 i wielu podpunktów nie ma.
+
+Podsumowując, zmienna ta pozornie nadawałaby się jako efekt stały, lecz uwzględnimy ją jako efekt losowy dla zachowania hierarchii i prostoty modelu.
+
+## Pozycja w kwestionariuszu
+
+```{r}
+length(levels(actionTimeScoreGender$position))
+```
+
+Pozycja w kwestionariuszu to zmienna, która mówi, w której ćwiartce dwugodzinnego testu znalazło się pytanie. Jak widać zmienna ma cztery poziomy i są to wszystkie poziomy, jakie można zaobserwować. Poziomy są tylko cztery więc zysk z efektu mieszanego byłby niewielki. Nie ma też zależności liczby efektów od liczby obserwacji. Mamy wszystkie poziomy i może nas interesować efekt każdego z osobna.
+
+Pozycję w kwestionariuszu uwzględnimy zatem jako efekt stały.
+
+## Płeć
+
+```{r}
+length(levels(actionTimeScoreGender$ST004D01T))
+```
+
+Mamy tylko dwa poziomy, są to wszystkie poziomy płci, nie ma zależności od liczby obserwacji, może nas interesować efekt poszczególnych płci.
+
+Płeć uwzględnimy zatem jako efekt stały.
+
+## Kraj
+
+```{r}
+length(levels(actionTimeScoreGender$CNT))
+```
+
+Mamy 58 poziomów zmiennej kraju, nie są to jednak wszystkie możliwe kraje (są to wszystkie objęte badaniem). Zatem w zależności od interpretacji możemy to potraktować jako efekt stały lub losowy. Poziomów jest dość dużo. Raczej nie ma zależności liczby poziomów od liczby obserwacji. Ponownie, w zależności od interpretacji może nas interesować efekt poszczególnych poziomów. Jeśli jednak chcielibyśmy badanie uogólnić na wszystkie kraje to taka liczba poziomów nie będzie wystarczająca do analizy.
+
+Podsumowując, kraj uwzględnimy jako efekt losowy. Przyjmiemy ogólnie, że badania mają dotyczyć uczniów na całym świecie, więc liczba poziomów w takiej interpretacji jest niekompletna. W ten sposób zmniejszymy też znacznie liczbę parametrów modelu.
+
+## Kwestionariusz
+
+```{r}
+length(levels(actionTimeScoreGender$BOOKID))     # kwestionariusz
+```
+
+Mamy 44 poziomy odpowiadające różnym kwestionariuszom, czyli zestawom pytań z ogólnej puli. Z pewnością nie są to wszystkie możliwe kwestionariusze. Poziomów jest również dość dużo. Nie ma zależności liczby poziomów od liczby obserwacji, kwestionariusze są ustalone. Raczej też nie interesuje nas efekt poszczególnych kwestionariuszy: są to po prostu losowo dobrane zestawy pytań i trudno o wnioski z analizy wpływu poszczególnych kwestionariuszy.
+
+Podsumowując, kwestionariusz uwzględnimy jako efekt losowy.
+
+# Wybór modelu
+
+Wybraliśmy zatem efekty stałe: pozycja w kwestionariuszu i płeć; oraz efekty losowe: id zadania, id podpunktu (zagnieżdżone w id zadania), kraj, kwestionariusz. Poszukamy teraz najlepszego modelu, który uwzględnia te efekty.
+
+W poprzednich etapach projektu zidentyfikowaliśmy wszystkie z powyższych efektów stałych jako istotne. Przeanalizujemy zatem tylko istotność dodanych w tym etapie efektów losowych: id zadania/id podpunktu oraz kraj i kwestionariusz.
+
+Dodatkowo, w punkcie 5 uwzględniliśmy interakcję między płcią i krajem oraz między płcią i numerem kwestionariusza. W tym punkcie jednak zmienne kraj i numer kwestionariusza traktujemy jako zmienne losowe, zatem nie możemy uwzględnić interakcji. Nie widać żadnej prostej zależności od płci, którą można by uwzględnić w macierzy kowariancji, pozostaniemy zatem przy modelu z niezależnymi zmiennymi losowymi.
+
+Poniżej wprowadzamy interesujące nas modele.
+
+```{r}
+invisible(gc)
+#model_old <- lm(sqrt(T) ~ position + ST004D01T + (1|M/Q) + CNT + BOOKID + ST004D01T*CNT+ST004D01T*BOOKID)
+model_small <- lm(sqrt(T) ~ position + ST004D01T, data=actionTimeScoreGenderSample)
+model1 <- lmer(sqrt(T) ~ position + ST004D01T + (1|M/Q), data=actionTimeScoreGenderSample)
+model2 <- lmer(sqrt(T) ~ position + ST004D01T + (1|CNT), data=actionTimeScoreGenderSample)
+model3 <- lmer(sqrt(T) ~ position + ST004D01T + (1|BOOKID), data=actionTimeScoreGenderSample)
+model4 <- lmer(sqrt(T) ~ position + ST004D01T + (1|M/Q) + (1|CNT), data=actionTimeScoreGenderSample)
+model5 <- lmer(sqrt(T) ~ position + ST004D01T + (1|M/Q) + (1|BOOKID), data=actionTimeScoreGenderSample)
+model6 <- lmer(sqrt(T) ~ position + ST004D01T + (1|CNT) + (1|BOOKID), data=actionTimeScoreGenderSample)
+model_full <- lmer(sqrt(T) ~ position + ST004D01T + (1|M/Q) + (1|CNT) + (1|BOOKID), data=actionTimeScoreGenderSample)
+```
+
+Prześledzimy teraz istotność zmiennych losowych w naszym modelu, poprzez dodawanie kolejnych zmiennych i wykonywanie testu ilorazu wiarygodności. Możliwych ścieżek mamy tylko 6, zatem prześledzimy wszystkie z nich.
+
+```{r}
+invisible(gc)
+anova(model_full, model4, model1, model_small)
+anova(model_full, model5, model1, model_small)
+anova(model_full, model4, model2, model_small)
+anova(model_full, model6, model2, model_small)
+anova(model_full, model5, model3, model_small)
+anova(model_full, model6, model3, model_small)
+```
+
+Jak widać, wszystkie czynniki losowe są bardzo istotne (p-value bliskie 0), bez względu na kolejność ich dodawania. Wybieramy zatem model pełny. Sprawdzimy jeszcze, czy zmniejszenie modelu o któryś z dodanych parametrów nie poprawi kryterium AIC lub BIC.
+
+```{r}
+(aic = lapply(c(model_full, model4, model5, model6), AIC))
+(bic = lapply(c(model_full, model4, model5, model6), BIC))
+```
+
+Jak widać, model pełny niewielkim kosztem ilości parametrów dobrze poprawia jakość modelu według kryteriów AIC i BIC. Dla obu kryteriów pierwsza wartość (odpowiadającemu pełnemu modelowi) jest najmniejsza.
+
+Szczególnie dużą różnicę widzimy dla modelu nie uwzględniającego wpływu zagnieżdżonej zmiennej losowej id zadania/id podpunktu.
+
+# Podsumowanie
+
+Dokonując porównań różnych modeli metodą ilorazu wiarygodności, oraz sprawdzając jakość modeli kryterium AIC oraz BIC, model który wybieramy to sqrt(T) ~ position + ST004D01T + (1|M/Q) + (1|CNT) + (1|BOOKID). W modelu tym wszystkie zmienne są istotne. Model ten jest mały (tylko 11 parametrów) lecz uwzględnia dużo istotnych informacji czyli: pozycję w teście, płeć ucznia, wariancję id zadania i podpunktu, wariancję kraju i wariancję zestawu testowego.
