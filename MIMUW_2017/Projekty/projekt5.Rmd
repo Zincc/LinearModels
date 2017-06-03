@@ -15,12 +15,13 @@ W tym etapie zbadaliœmy interakcje miêdzy zmiennymi kraj i p³eæ oraz indeks podr
 #Przygotowanie danych
 
 ```{r,message=FALSE, warning=FALSE}
-
+library("forcats")
 library("tidyr")
 library("lmtest")
 library("MASS")
 library("ggplot2")
 library("dplyr")
+library("plyr")
 ``` 
 ```{r, cache = TRUE}
 load("C:/Users/Anna/Downloads/actionTimeScoreGender.rda") # dane o zadaniach z matematyki plus plec
@@ -54,11 +55,15 @@ m1=lm(sqrt(T) ~ CNT + ST004D01T + BOOKID + position + M/Q, data = actionTimeScor
 Najpierw sprawdzimy na wykresie interakcje miêdzy zmienn¹ CNT oznaczaj¹c¹ kraj ucznia oraz zmienn¹ ST004D01T oznaczaj¹c¹ p³eæ. Zmienna kraj ma 59 poziomów, wiêc rozbijemy dane na trzy czêœci, ¿eby móc lepiej zaobserwowaæ ewentualne interakcje.
 
 ```{r}
-attach(actionTimeScoreGender)
-countries=levels(CNT)
-new<- filter(actionTimeScoreGender, CNT %in% countries[1:20])
-tst<- new %>% group_by(CNT, ST004D01T) %>% summarise(time=mean(sqrt(T)))
-p=ggplot(new, aes(x = factor(CNT), y = sqrt(T), colour = ST004D01T)) + 
+actionTimeScoreGenderFemale<- filter(actionTimeScoreGender, actionTimeScoreGender$ST004D01T %in% "Female")
+a<-ddply(actionTimeScoreGenderFemale, .(CNT), summarize, time=mean(sqrt(T)))
+
+b <- a[order(a$time),] 
+chr=as.character(b$CNT)
+new <- filter(actionTimeScoreGender, actionTimeScoreGender$CNT %in% b$CNT[1:20])
+tst <- ddply(new,.(CNT,ST004D01T),summarise, time = mean(sqrt(T)))
+
+p=ggplot(new, aes(x = fct_relevel(CNT,chr), y = sqrt(T), colour = ST004D01T)) + 
     geom_point(data = tst, aes(y = time)) +
     geom_line(data = tst, aes(y = time, group = ST004D01T)) + 
     theme_bw()+theme(axis.text.x = element_text(angle = 90, hjust = 1))+
@@ -68,26 +73,30 @@ p=ggplot(new, aes(x = factor(CNT), y = sqrt(T), colour = ST004D01T)) +
 
 print(p)
 
-new<- filter(actionTimeScoreGender, CNT %in% countries[21:40])
-tst<- new %>% group_by(CNT, ST004D01T) %>% summarise(time=mean(sqrt(T)))
-p=ggplot(new, aes(x = factor(CNT), y = sqrt(T), colour = ST004D01T)) + 
+new <- filter(actionTimeScoreGender, actionTimeScoreGender$CNT %in% b$CNT[21:40])
+tst <- ddply(new,.(CNT,ST004D01T),summarise, time = mean(sqrt(T)))
+
+p=ggplot(new, aes(x = fct_relevel(CNT,chr), y = sqrt(T), colour = ST004D01T)) + 
     geom_point(data = tst, aes(y = time)) +
     geom_line(data = tst, aes(y = time, group = ST004D01T)) + 
     theme_bw()+theme(axis.text.x = element_text(angle = 90, hjust = 1))+
     xlab("Kraj")+
     ylab("Œredni czas zadania")+
     ggtitle("Wykres interakcji miêdzy krajem a p³ci¹ ucznia ")+ scale_colour_discrete(name="P³eæ")
+
 print(p)
 
-new<- filter(actionTimeScoreGender, CNT %in% countries[41:59])
-tst<- new %>% group_by(CNT, ST004D01T) %>% summarise(time=mean(sqrt(T)))
-p=ggplot(new, aes(x = factor(CNT), y = sqrt(T), colour = ST004D01T)) + 
+new <- filter(actionTimeScoreGender, actionTimeScoreGender$CNT %in% b$CNT[41:58])
+tst <- ddply(new,.(CNT,ST004D01T),summarise, time = mean(sqrt(T)))
+
+p=ggplot(new, aes(x = fct_relevel(CNT,chr), y = sqrt(T), colour = ST004D01T)) + 
     geom_point(data = tst, aes(y = time)) +
     geom_line(data = tst, aes(y = time, group = ST004D01T)) + 
     theme_bw()+theme(axis.text.x = element_text(angle = 90, hjust = 1))+
     xlab("Kraj")+
     ylab("Œredni czas zadania")+
     ggtitle("Wykres interakcji miêdzy krajem a p³ci¹ ucznia ")+ scale_colour_discrete(name="P³eæ")
+
 print(p)
 
   
@@ -100,10 +109,15 @@ Po przyjrzeniu siê powy¿szym wykresom mo¿emy podejrzewaæ, ¿e interakcje mog¹ byæ
 Teraz sprawdŸmy na wykresie interakcje miêdzy zmienn¹ BOOKID oznaczaj¹c¹ indeks podrêcznika oraz zmienn¹ ST004D01T oznaczaj¹c¹ p³eæ. Zmienna BOOKID ma 44 poziomy, wiêc rozbijemy dane na dwie czêœci, ¿eby móc lepiej zaobserwowaæ ewentualne interakcje.
 
 ```{r}
-book=levels(BOOKID)
-new<- filter(actionTimeScoreGender, BOOKID %in% book[1:22])
-tst<- new %>% group_by(BOOKID, ST004D01T) %>% summarise(time=mean(sqrt(T)))
-p=ggplot(new, aes(x = factor(BOOKID), y = sqrt(T), colour = ST004D01T)) + 
+actionTimeScoreGenderFemale<- filter(actionTimeScoreGender, actionTimeScoreGender$ST004D01T %in% "Female")
+a<-ddply(actionTimeScoreGenderFemale, .(BOOKID), summarize, time=mean(sqrt(T)))
+
+b <- a[order(a$time),] 
+chr=as.character(b$BOOKID)
+new <- filter(actionTimeScoreGender, actionTimeScoreGender$BOOKID %in% b$BOOKID[1:22])
+tst <- ddply(new,.(BOOKID,ST004D01T),summarise, time = mean(sqrt(T)))
+
+p=ggplot(new, aes(x = fct_relevel(BOOKID,chr), y = sqrt(T), colour = ST004D01T)) + 
     geom_point(data = tst, aes(y = time)) +
     geom_line(data = tst, aes(y = time, group = ST004D01T)) + 
     theme_bw()+theme(axis.text.x = element_text(angle = 90, hjust = 1))+
@@ -112,10 +126,11 @@ p=ggplot(new, aes(x = factor(BOOKID), y = sqrt(T), colour = ST004D01T)) +
     ggtitle("Wykres interakcji miêdzy indeksem podrêcznika a p³ci¹ ucznia ")+ scale_colour_discrete(name="P³eæ")
 print(p)
 
-book=levels(BOOKID)
-new<- filter(actionTimeScoreGender, BOOKID %in% book[23:44])
-tst<- new %>% group_by(BOOKID, ST004D01T) %>% summarise(time=mean(sqrt(T)))
-p=ggplot(new, aes(x = factor(BOOKID), y = sqrt(T), colour = ST004D01T)) + 
+
+new <- filter(actionTimeScoreGender, actionTimeScoreGender$BOOKID %in% b$BOOKID[23:44])
+tst <- ddply(new,.(BOOKID,ST004D01T),summarise, time = mean(sqrt(T)))
+
+p=ggplot(new, aes(x = fct_relevel(BOOKID,chr), y = sqrt(T), colour = ST004D01T)) + 
     geom_point(data = tst, aes(y = time)) +
     geom_line(data = tst, aes(y = time, group = ST004D01T)) + 
     theme_bw()+theme(axis.text.x = element_text(angle = 90, hjust = 1))+

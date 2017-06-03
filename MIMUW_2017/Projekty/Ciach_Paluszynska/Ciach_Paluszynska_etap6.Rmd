@@ -1,0 +1,410 @@
+---
+title: "Etap 6: Weryfikacja potrzeby i poprawny wybór transformacji/kodowania dla zmiennych zale¿nych i niezale¿nych"
+author: "Micha³ Ciach, Ola Paluszyñska"
+date: "25 maja 2017"
+output: 
+    html_document:
+        toc: true
+        toc_depth: 3
+        toc_float: true
+        number_sections: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, cache = TRUE)
+library(ggplot2)
+library(data.table)
+library(MASS)
+library(nortest)
+library(moments)
+library(car)
+library(tidyr)
+setwd("~/UW/Modele_Liniowe_i_Mieszane/Projekt")
+options(digits = 4)
+```
+
+# Streszczenie wyników
+
+W tym etapie przyjrzeliœmy siê dok³adniej zmiennym niezale¿nym odpowiadaj¹cym punktacji zadania (`score`), liczbie ksi¹¿ek w domu (`no_of_books`) oraz wykszta³ceniu matki i ojca (`mother_edu`, `father_edu`). Ka¿da z wymienionych zmiennych jest jakoœciowa o kilku kategoriach, a wiêc w³¹czaj¹c je do modelu mo¿emy zastosowaæ ró¿nego rodzaju kodowanie i/lub transformacjê, których wybór wp³ywa na dopasowanie i wielkoœæ modelu.
+
+W przypadku zmiennej `score` zdecydowaliœmy siê wykluczyæ ze zbioru danych zadanie, dla którego skala tej zmiennej by³a inna ni¿ w pozosta³ych przypadkach (zadanie to dopuszcza³o "Partial credit"). Dla `no_of_books` rozwa¿yliœmy kodowanie ci¹g³e i ³¹czenie niektórych poziomów, jednak ¿adne z nich nie okaza³o siê lepsze od wyjœciowego. W przypadku `father_edu` kodowanie ci¹g³e znacznie poprawi³o jakoœæ modelu, czego nie mo¿na powiedzieæ o `mother_edu`. Z tego wzglêdu rozwa¿yliœmy kontrasty wielomianowe i ³¹czenie poziomów `mother_edu` na podstawie testu post-hoc Tukey'a, ale ¿adne z podejœæ nie poprawi³o modelu pod wzglêdem kryteriów informacyjnych.
+
+W drugiej czêœci pracy rozwa¿yliœmy transformacje zmiennej niezale¿nej Boxa-Coxa oraz logarytmiczne z przesuniêciem. Na poprzednich etapach analizy wybraliœmy logarytmiczn¹ z przesuniêciem jako optymaln¹, jednak po licznych zmianach w wybranym modelu okaza³o siê, ¿e transformacja Boxa-Coxa obni¿a kryteria informacyjne prawie piêciokrotnie i prowadzi do niemal¿e symetrycznego rozk³adu reszt (choæ trochê zbyt spiczastego co powoduje wizualnie wiêksz¹ rozbie¿noœæ z rozk³adem normalnym). Ostatecznie, kieruj¹c siê kryteriami informacyjnymi, do dalszej analizy wybraliœmy transformacjê Boxa-Coxa z wyk³adnikiem 0.3434.
+
+# Wyjœciowy model
+
+Najpierw przypomnimy model bêd¹cy efektem poprzednich etapów pracy.
+
+## £adowanie danych
+
+```{r, include = FALSE, eval = FALSE}
+pelne.dane <- fread("Curated_full_data.csv", sep=",", header=TRUE, stringsAsFactors = TRUE)
+wybrane.szkoly <- fread("Chosen_schools.csv", sep=",", header=TRUE, stringsAsFactors = TRUE)
+wybrane.szkoly <- factor(unlist(wybrane.szkoly))
+probka <- pelne.dane[pelne.dane$CNTSCHID %in% wybrane.szkoly, ]
+probka <- as.data.frame(probka)
+for(i in 1:ncol(probka)){
+  if(is.factor(probka[,i])) probka[,i] <- factor(probka[,i])  # uaktualnienie poziomow
+}
+probka$time.log <- log(probka$time + 0.4108118)
+rm(pelne.dane, wybrane.szkoly)
+save(probka, file = "Projekt_probka.rda")
+```
+
+Poni¿ej ³adujemy wybran¹ uprzednio próbkê szkó³. Na etapie wyboru próbki rozwa¿aliœmy przeprowadzanie analizy na co czwartej lub co dziesi¹tej szkole. Do tej pory u¿ywaliœmy wiêkszej z tych dwóch próbek, ale ze wzglêdu na wielkoœæ modelu, do którego doszliœmy w poprzednim etapie, od tej pory ograniczymy siê do mniejszej próbki (co dziesi¹ta szko³a), co umo¿liwi nam swobodne porównywanie wielu modeli o znacznych rozmiarach. Dla przejrzystoœci zmieniamy nazwy zmiennych wykorzystywanych w stworzonym przez nas na poprzednich etapach modelu, a nastêpnie ustalamy poziomy bazowe tak jak wczeœniej:
+
+```{r}
+load("Projekt_probka.rda")
+probka <- probka[, c("time", "time.log", "task", "HEDRES", "CNT", "ST013Q01TA", "WEALTH", "BOOKID", "FISCED", "MISCED", "gender", "S")]
+colnames(probka)[-(1:3)] <- c("edu_resources", "country", "no_of_books", "wealth", "book_id", "father_edu", "mother_edu", "gender", "score") 
+probka$country <- relevel(probka$country, ref = "POL")
+probka$mother_edu <- relevel(probka$mother_edu, ref = "0")
+probka$father_edu <- relevel(probka$father_edu, ref = "0")
+probka$no_of_books <- factor(as.numeric(as.character(probka$no_of_books)), levels = c(-1, 1:6), labels = c("-1", "0-10", "11-25", "26-100", "101-200", "201-500", ">500"))
+probka$no_of_books <- relevel(probka$no_of_books, ref="0-10")
+probka$score <- relevel(probka$score, ref = "No credit")
+probka$female <- probka$gender == "1"
+```
+
+## Oszacowania modelu
+
+Poni¿ej szacujemy parametry modelu wyjœciowego. Warto zaznaczyæ, ¿e zastosowana przez nas transformacja zmiennej objaœnianej zosta³a wybrana przed dodaniem wielu ze zmiennych objaœniaj¹cych, wiêc prawdopodobnie nie jest optymalna. Ponadto, oszacowany przez nas model ma bardzo du¿o parametrów ze wzglêdu na wystêpuj¹ce w nim zmienne jakoœciowe o wielu kategoriach i ich interakcje, a zatem warto rozwa¿yæ ich transformacje.
+
+```{r}
+modelBase <- lm(time.log ~ score*(task + edu_resources + no_of_books + wealth + book_id + father_edu) + mother_edu + female + country, data = probka)
+anova(modelBase)
+```
+
+# Kodowanie zmiennych niezale¿nych
+
+W naszym modelu mamy du¿o zmiennych objaœniaj¹cych: dla ka¿dej z nich mo¿na by rozwa¿yæ wszelkiego rodzaju kodowania i transformacje w celu poprawienia jakoœci modelu lub pomniejszenia jego rozmiaru przy nieznacznym pogorszeniu jakoœci. W tej czêœci rozwa¿ymy transformacje trzech zmiennych, których obecny sposób w³¹czenia do modelu wydaje siê wysoce nieoptymalny (tylko niektóre odpowiadaj¹ce im parametry s¹ istotne w modelu): `score`, `no_of_books`, `father_edu` oraz `mother_edu`.
+
+## Punktacja zadania
+
+Punktacja zadania jest wa¿n¹ zmienn¹ w naszym modelu ze wzglêdu na to, ¿e wchodzi w sk³ad kilku interakcji. Jej rozk³ad w próbie jest nastêpuj¹cy, w warstwach ze wzglêdu na zadanie:
+
+```{r}
+table(probka$task, probka$score)
+```
+
+Jak widaæ, kategoria "Partial credit" jest nie tylko bardzo ma³o liczna, ale przede wszystkim wystêpuje tylko dla jednego zadania, a wiêc jest nietypowa. Z tego wzglêdu nie do koñca wiemy co oznacza ta kategoria i jak siê ma do ocen w innych zadaniach. Ostatecznie zdecydowaliœmy siê usun¹æ z naszej próbki dane dotycz¹ce zadania "M955", ze wzglêdu na wa¿n¹ rolê interakcji ze zmienn¹ `score` w naszym modelu, która dla tego zadania mierzona jest w innej skali ni¿ dla pozosta³ych.
+
+```{r}
+probka <- probka[probka$task != "M955", ]
+probka$score <- droplevels(probka$score)
+probka$task <- droplevels(probka$task)
+modelBase <- lm(time.log ~ score*(task + edu_resources + no_of_books + wealth + book_id + father_edu) + mother_edu + female + country, data = probka)
+crit_base <- c(AIC = AIC(modelBase), BIC = BIC(modelBase))
+```
+
+Nastêpnie tworzymy tabelê z parametrami modelu z osobn¹ kolumn¹ `beta_score` uwzglêdniaj¹c¹ interakcjê ze zmienn¹ `score` (jest w niej suma danego parametru i odpowiedniego parametru dla zmiennej `score`), zapisujemy to w formie funkcji do ponownego u¿ycia.
+
+```{r}
+coefs_score <- function(x){
+  coefs <- data.frame(beta = x, variable = gsub("score.+:", "", names(x)), score = "No credit")
+  coefs$score <- as.character(coefs$score)
+  coefs$score[grep("score.+:", rownames(coefs))] <- rownames(coefs)[grep("score.+:", rownames(coefs))]
+  coefs$score <- gsub("score", "", coefs$score)
+  coefs$score <- gsub(":.+", "", coefs$score)
+  coefs$score[c(1:3, grep("country", rownames(coefs)), grep("female", rownames(coefs)), grep("mother_edu", rownames(coefs)))] <- NA
+  rownames(coefs) <- NULL
+  coefs$score <- factor(coefs$score, levels = c("-1", "No credit", "Full credit"))
+  coefs$beta_score <- NA
+  coefs[grep("-1", as.character(coefs$score)), "beta_score"] <- coefs$beta[grep("-1", as.character(coefs$score))] + coefs$beta[2]
+  coefs[grep("Full credit", as.character(coefs$score)), "beta_score"] <- coefs$beta[grep("Full credit", as.character(coefs$score))] + coefs$beta[3]
+  coefs[grep("No credit", as.character(coefs$score)), "beta_score"] <- coefs$beta[grep("No credit", as.character(coefs$score))]
+  coefs$variable <- as.character(coefs$variable)
+  return(coefs)
+}
+coefs <- coefs_score(modelBase$coefficients)
+```
+
+## Liczba ksi¹¿ek
+
+Zmienna `no_of_books` ma nastêpuj¹cy rozk³ad w naszej próbce:
+
+```{r}
+table(probka$no_of_books)
+```
+
+Widaæ, ¿e zmienna ta ma a¿ siedem poziomów (-1 oznacza brak danych, poziom "0-10" jest bazowy), a odpowiadaj¹ce jej parametry s¹ nastêpuj¹ce:
+
+```{r}
+df <- coefs[grep("no_of_books", coefs$variable), ]
+df$variable <- factor(df$variable, levels = paste0("no_of_books", setdiff(levels(probka$no_of_books), "0-10")))
+ggplot(df, aes(y = beta_score, x = variable)) + geom_bar(stat = "identity") + facet_wrap(~ score) + theme(axis.text.x=element_text(angle = 45, hjust = 1))
+```
+
+Na wykresie widzimy, ¿e parametry dla zmiennej `no_of_books`zmieniaj¹ siê monotonicznie dla kolejnych jej poziomów z wyj¹tkiem ostatniego (co ciekawe, w monotonicznoœæ wpisuje siê równie¿ kategoria -1 oznaczaj¹ca brak danych). Z tego wzglêdu sensownym wydaje siê w³¹czenie tej zmiennej do modelu jako ci¹g³ej. W tym celu wygenerujemy zmienn¹ `no_of_books_na` mówi¹c¹, czy brakuje wartoœci dla `no_of_books`, a nastêpnie now¹ zmienn¹ `no_of_books_num`, w której zakodujemy wartoœci numeryczne jeœli takowe by³y i œredni¹ w próbie, jeœli tych wartoœci nie by³o. Nastêpnie do modelu w³¹czamy obie nowe zmienne.
+
+```{r}
+probka$no_of_books <- relevel(probka$no_of_books, ref = "-1")
+probka$no_of_books_na <- probka$no_of_books == "-1"
+probka$no_of_books_num <- as.numeric(probka$no_of_books)
+probka[probka$no_of_books_num == 1, "no_of_books_num"] <- mean(probka[probka$no_of_books_num != 1, "no_of_books_num"])
+probka$no_of_books <- relevel(probka$no_of_books, ref = "0-10")
+model <- lm(time.log ~ score*(task + edu_resources + no_of_books_num + no_of_books_na + wealth + book_id + father_edu) + mother_edu + female + country, data = probka)
+anova(model)[grep("no_of_books", rownames(anova(model))),]
+nowy <- c(AIC = AIC(model), BIC = BIC(model))
+```
+
+Powy¿ej widaæ, ¿e obie nowe zmienne s¹ istotne, choæ `no_of_books_na` objaœnia znacznie mniej zmiennoœci (zarówno w interakcji, jak i bez). Jak ju¿ wspomnieliœmy, ostatnia kategoria `no_of_books` w wyjœciowym modelu nie zachowywa³a siê jak pozosta³e, wiêc w nastêpnym kroku dodamy równie¿ zmienn¹ zero-jedynkow¹ wskazuj¹c¹ na odpowiedŸ ">500":
+
+```{r}
+probka$no_of_books_500 <- probka$no_of_books == ">500"
+model <- lm(time.log ~ score*(task + edu_resources + no_of_books_num + no_of_books_na + no_of_books_500 + wealth + book_id + father_edu) + mother_edu + female + country, data = probka)
+anova(model)[grep("no_of_books", rownames(anova(model))),]
+nowy2 <- c(AIC = AIC(model), BIC = BIC(model))
+```
+
+Zgodnie z naszymi oczekiwaniami parametr dla zmiennej wskazuj¹cej kategoriê ">500" jest istotny, a sama zmienna wyjaœnia wiêcej zmiennoœci ni¿ `no_of_books_num` (choæ jest odwrotnie dla interakcji ze `score`), co pozwala przypuszczaæ, ¿e osoby maj¹ce ponad 500 ksi¹¿ek w domu w pewien sposób ró¿ni¹ siê od osób maj¹cych mniej ni¿ 500 ksi¹zek (pierwsza z tych grup mo¿e byæ te¿ bardziej ró¿norodna). Odpowiednie oszacowania w nowym modelu s¹ nastêpuj¹ce:
+
+```{r}
+coefs <- coefs_score(model$coefficients)
+ggplot(coefs[grep("no_of_books", coefs$variable), ], aes(y = beta_score, x = variable)) + geom_bar(stat = "identity") + facet_wrap(~ score) + theme(axis.text.x=element_text(angle = 45, hjust = 1))
+```
+
+Widaæ, ¿e u osób, które rozwi¹za³y zadanie poprawnie wszystkie zmienne zwi¹zane z liczb¹ ksi¹¿ek sa dodatnio zwi¹zane z czasem rozwi¹zywania. Zale¿noœæ ta jest bliska zera dla osób, które Ÿle rozwi¹za³y zadanie i ujemna dla tych, dla których nie ma informacji o punktacji.
+
+Porównajmy teraz dwa nowe modele z wyjœciowym pod wzglêdem kryteriów informacyjnych:
+
+```{r}
+data.frame(stary = crit_base, nowy = nowy, nowy_plus_6 = nowy2); rm(model, nowy, nowy2)
+```
+
+Niestety ¿aden z nowych modeli nie jest lepszy, nawet pod wzglêdem kryterium BIC. Wynika to prawdopodobnie z niewielkiego zysku jeœli chodzi o stopnie swobody w przypadku tej zmiennej, gdy¿ ma ona jedynie szeœæ poziomów i nie wchodzi w ¿adn¹ interakcjê. Rozwa¿my jeszcze model uwzglêdniaj¹cy jedynie czy uczeñ ma ponad 500 ksi¹¿ek w domu, czy nie:
+
+```{r}
+model <- lm(time.log ~ score*(task + edu_resources + no_of_books_500 + wealth + book_id + father_edu) + mother_edu + female + country, data = probka)
+anova(model)[grep("no_of_books", rownames(anova(model))),]
+c(AIC = AIC(model), BIC = BIC(model))
+```
+
+Jak widaæ, uwzglêdnienie jedynie `no_of_books_500` jeszcze bardziej pogarsza model pod wzglêdem kryteriów informacyjnych. Z tego wzglêdu powracamy do wyjœciowego kodowania zmiennej `no_of_books`.
+
+## Wykszta³cenie matki i ojca
+
+Kodowanie i transformacje zmiennych `mother_edu` i `father_edu` bêdziemy rozwa¿aæ równolegle ze wzglêdu na to, ¿e zmienne te maj¹ tak¹ sam¹ strukturê, wiêc warto sprawdziæ skutek jednoczesnej ich transformacji. Maj¹ one nastêpuj¹cy rozk³ad w naszej próbie:
+
+```{r}
+rbind(mother = table(probka$mother_edu), father = table(probka$father_edu))
+```
+
+Rozk³ady te wygl¹daj¹ podobnie z wyj¹tkiem wyraŸnie wiêkszej liczby braków danych w przypadku wykszta³cenia ojca co mo¿e odzwierciedlaæ fakt, ¿e dzieci czêœciej wychowywane s¹ przez samotne matki ni¿ przez samotnych ojców.
+
+### Kodowanie iloœciowe
+
+Najpierw rozwa¿ymy kodowanie iloœciowe obu zmiennych z dodaniem zmiennej wskazuj¹cej braki danych i oszacujemy trzy modele uwzgledniaj¹ce takie kodowanie dla jednej lub obu zmiennych.
+
+```{r}
+probka$mother_edu_na <- probka$mother_edu == "-1"
+probka$mother_edu_num <- as.numeric(as.character(probka$mother_edu))
+probka[probka$mother_edu_num == -1, "mother_edu_num"] <- mean(probka[probka$mother_edu_num != -1, "mother_edu_num"])
+probka$father_edu_na <- probka$father_edu == "-1"
+probka$father_edu_num <- as.numeric(as.character(probka$father_edu))
+probka[probka$father_edu_num == -1, "father_edu_num"] <- mean(probka[probka$father_edu_num != -1, "father_edu_num"])
+
+model <- lm(time.log ~ score*(task + edu_resources + no_of_books + wealth + book_id + father_edu_num + father_edu_na) + mother_edu_num + mother_edu_na + female + country, data = probka)
+model_both <- c(AIC = AIC(model), BIC = BIC(model))
+model <- lm(time.log ~ score*(task + edu_resources + no_of_books + wealth + book_id + father_edu) + mother_edu_num + mother_edu_na + female + country, data = probka)
+model_mom <- c(AIC = AIC(model), BIC = BIC(model))
+model <- lm(time.log ~ score*(task + edu_resources + no_of_books + wealth + book_id + father_edu_num + father_edu_na) + mother_edu + female + country, data = probka)
+model_dad <- c(AIC = AIC(model), BIC = BIC(model))
+data.frame(stary = crit_base, model_both = model_both, model_dad = model_dad, model_mom = model_mom)
+```
+
+Oba kryteria informacyjne wskazuj¹ na model z kodowaniem iloœciowym wykszta³cenia ojca jako na najlepszy spoœród trzech rozwa¿anych powy¿ej i bazowego. Aby potwierdziæ sensownoœæ iloœciowego kodowania wykszta³cenia ojca szacujemy model z kontrastami wielomianowymi dla tego wykszta³cenia po zakodowaniu `father_edu = "-1"` jako poziomu 4 ze wzglêdu na to, ¿e œrednia z próby `father_edu` wœród tych, dla których nie brakowa³o tej danej, wynios³a 4.05 (nowa zmienna to `father_edu_new`).
+
+```{r}
+probka$father_edu_new <- probka$father_edu
+probka$father_edu_new[probka$father_edu_new == "-1"] <- "4"
+probka$father_edu_new <- droplevels(probka$father_edu_new)
+model <- lm(time.log ~ score*(task + edu_resources + no_of_books + wealth + book_id + father_edu_na + father_edu_new) + mother_edu + female + country, data = probka, contrasts = list(father_edu_new = contr.poly(7)))
+df <- as.data.frame(summary(model)$coefficients); df$variable <- rownames(df)
+(df <- cbind(df[, ], czy_istotne = as.numeric(df[, 4] < 0.05)))[grep("father_edu_new", rownames(df)), c(1,4,6)]
+```
+
+W powy¿szej tabeli oszacowañ widzimy, ¿e przy poziomie istotnoœci 0.05 dla zmiennej `father_edu_new` istotne s¹ kontrasty liniowe oraz czwartego i pi¹tego stopnia, ale wy³¹cznie bez interakcji ze `score`. Gdyby nie istotnoœæ tych dwóch ostatnich oszacowañ, kodowanie iloœciowe zmiennej `father_edu` by³oby ca³kowicie uprawnione -- liniowe kontrasty koduj¹ kategorie zmiennej jako równoodleg³e, co jest g³ównym za³o¿eniem kodowania iloœciowego. Poniewa¿ dwa z pozosta³ych kontrastów s¹ istotne, kodowanie iloœciowe jest pewnym uproszczeniem, na które decydujemy siê ze wzglêdu na zwi¹zan¹ z nim du¿¹ oszczêdnoœæ stopni swobody.
+
+Ostatecznie, jako nowy model wyjœciowy przyjmujemy ten, w którym wykszta³cenie ojca traktujemy jako zmienn¹ ci¹g³¹:
+
+```{r}
+modelBase <- lm(time.log ~ score*(task + edu_resources + no_of_books + wealth + book_id + father_edu_num + father_edu_na) + mother_edu + female + country, data = probka)
+coefs <- coefs_score(modelBase$coefficients)
+crit_base <- c(AIC = AIC(modelBase), BIC = BIC(modelBase))
+```
+
+### Kontrasty wielomianowe
+
+Poprawiliœmy ju¿ nasz model pod wzglêdem sposobu kodowania wykszta³cenia ojca, jednak nie uda³o siê to nam w przypadku wykszta³cenia matki. Na poni¿szym wykresie przedstawiamy oszacowania parametrów dla tej zmiennej -- nie widaæ tutaj monotonicznoœci (po wy³¹czeniu dwóch skrajnych kategorii mo¿na zauwa¿yæ trend kwadratowy), wiêc nic dziwnego, ¿e za³o¿enie o liniowoœci `mother_edu` nie poprawia³o kryteriów informacyjnych modelu.
+
+```{r}
+ggplot(df[grep("mother_edu", df$variable), ], aes(y = Estimate, x = variable, fill = as.factor(czy_istotne))) + geom_bar(stat = "identity") + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+Zastosowanie kontrastów wielomianowych do wykszta³cenia matki (po podobnych przekszta³ceniach co wczeœniej, prowadz¹cych do zmiennej `mother_edu_new`) potwierdza nasze przypuszczenia o wystêpowaniu trendu kwadratowego, jednak po wy³¹czeniu kategorii "-1" (brak danych) istotne pozostaj¹ trendy wszystkich stopni oprócz pi¹tego, co mo¿e byæ powodowane odstaj¹cym charakterem kategorii "6".
+
+```{r}
+probka$mother_edu_new <- probka$mother_edu
+probka$mother_edu_new[probka$mother_edu_new == "-1"] <- "4"
+probka$mother_edu_new <- droplevels(probka$mother_edu_new)
+model <- lm(time.log ~ score*(task + edu_resources + no_of_books + wealth + book_id + father_edu_num + father_edu_na) + mother_edu_na + mother_edu_new + female + country, data = probka, contrasts = list(mother_edu_new = contr.poly(7)))
+df <- as.data.frame(summary(model)$coefficients)
+cbind(df[, ], czy_istotne = as.numeric(df[, 4] < 0.05))[grep("mother_edu_new", rownames(df)), ]
+```
+
+Poni¿ej przeprowadzamy estymacjê z kontrastami wielomianowymi po wprowadzeniu do modelu osobnej zmiennej wskazuj¹cej kategoriê "6". Jak widaæ w tabeli poni¿ej powoduje to eliminacjê istotnoœci trendu kwadratowego dla zmiennej `mother_edu_new`, ale trend trzeciego i czwartego stopnia pozostaj¹ istotne, co oznacza, ¿e nie jest to dobre podejœcie.
+
+```{r}
+probka$mother_edu6 <- probka$mother_edu == "6"
+model <- lm(time.log ~ score*(task + edu_resources + no_of_books + wealth + book_id + father_edu_num + father_edu_na) + mother_edu_na + mother_edu6 + mother_edu_new + female + country, data = probka, contrasts = list(mother_edu_new = contr.poly(7)))
+df <- as.data.frame(summary(model)$coefficients)
+cbind(df, czy_istotne = as.numeric(df[, 4] < 0.05))[grep("mother_edu", rownames(df)), ]
+rm(model)
+```
+
+### £¹czenie poziomów
+
+Naszym ostatnim podejœciem do kodowania wykszta³cenia matki jest próba po³¹czenia podobnych do siebie poziomów. W tym celu wykonamy test post hoc Tukey'a aby sprawdziæ, czy s¹ poziomy, które nie ró¿ni¹ siê od siebie istotnie.
+
+```{r}
+plot(TukeyHSD(aov(time.log ~ score*(task + edu_resources + no_of_books + wealth + book_id + father_edu_num + father_edu_na) + mother_edu + female + country, data = probka), which = "mother_edu"), las = 1)
+```
+
+Na powy¿szym wykresie widaæ, ¿e ró¿nice œrednich miêdzy ka¿d¹ z par poziomów 2, 4 i 5 s¹ nieistotne statystycznie, podobnie jak ró¿nice miêdzy 1 i 0 oraz 3 i -1. Ze wzglêdu na fakt, ¿e wykszta³cenie jest zmienn¹ porz¹dkow¹, najbardziej sensowne wydaje siê ³¹czenie poziomów wystêpuj¹cych obok siebie ze wzglêdu na ich interpretowalnoœæ (np. po³¹czenie poziomu 3 i -1 czyli braku danych by³oby dziwne), zatem oszacujemy model ze zmienn¹ `mother_edu_merge`, powsta³¹ poprzez po³¹czenie poziomów 2 i 5 oraz 0 i 1 zmiennej `mother_edu`. Mimo to rozwa¿ymy równie¿ model, w którym `mother_edu` ma po³¹czone kategorie -1 i 3, dla porównania.
+
+```{r}
+probka$mother_edu_merge <- factor(as.numeric(as.character(probka$mother_edu)), levels = -1:6, labels = c(-1, "01", "01", 2, 3, "45", "45", 6))
+probka$mother_edu_merge <- droplevels(probka$mother_edu_merge)
+probka$mother_edu_merge <- relevel(probka$mother_edu_merge, ref = "01")
+model <- lm(time.log ~ score*(task + edu_resources + no_of_books + wealth + book_id + father_edu_num + father_edu_na) + mother_edu_merge + female + country, data = probka)
+nowy <- c(AIC = AIC(model), BIC = BIC(model))
+
+probka$mother_edu_merge_13 <- factor(as.numeric(as.character(probka$mother_edu)), levels = -1:6, labels = c("-13", "01", "01", 2, "-13", "45", "45", 6))
+probka$mother_edu_merge_13 <- droplevels(probka$mother_edu_merge_13)
+probka$mother_edu_merge_13 <- relevel(probka$mother_edu_merge_13, ref = "01")
+model <- lm(time.log ~ score*(task + edu_resources + no_of_books + wealth + book_id + father_edu_num + father_edu_na) + mother_edu_merge_13 + female + country, data = probka)
+nowy_13 <- c(AIC = AIC(model), BIC = BIC(model))
+
+data.frame(stary = crit_base, nowy = nowy, nowy_13 = nowy_13)
+```
+
+Na podstawie powy¿szych kryteriów informacyjnych mo¿na stwierdziæ, ¿e w obu przypadkach po³¹czenie wybranych kategorii powoduje nieznaczne pogorszenie modelu wed³ug AIC i polepszenie wed³ug BIC. Warto jednak zauwa¿yæ, ¿e zmiany kryteriów informacyjnych s¹ tutaj niewielkie (w porównaniu do obserwowanych na poprzednich etapach analizy), wiêc ostatecznie decydujemy siê pozostaæ przy wyjœciowym kodowaniu wykszta³cenia matki.
+
+### Minimalne i maksymalne wykszta³cenie rodziców
+
+Alternatywnym podejœciem do uwzglêdnienia w modelu wykszta³cenia rodziców jest wyró¿nienie maksymalnego lub minimalnego wykszta³cenia rodziców, gdy¿ mo¿na podejrzewaæ, ¿e rozró¿nianie rodziców ze wzglêdu na p³eæ nie jest istotne przy kszta³towaniu zdolnoœci dziecka do rozwi¹zywania zadañ -- rozró¿nienie rodziców ze wzglêdu na ich poziom wykszta³cenia (ni¿szy lub wy¿szy) wydaje siê w tym kontekœcie bardziej adekwatne.
+
+Poni¿ej tworzymy model, w którym `edu_max` jest w interakcji ze `score` (zamiast `father_edu`), a `edu_min` nie (sprawdziliœmy, ¿e interakcja z pierwsz¹ z tych dwóch zmiennych wyjaœnia wiêcej zmiennoœci, a w ten sposób mamy model z tak¹ sam¹ liczb¹ parametrów jak wczeœniej, wiêc porównanie bêdzie dotyczy³o jedynie tego jak dobrze ka¿dy z nich wyjaœnia zmienoœæ zmiennej objaœnianej). W przypadku zmiennej `edu_max` jako kategoriê bazow¹ bierzemy najwy¿szy poziom wykszta³cenia ze wzglêdu na du¿¹ liczbê obserwacji dla niej.
+
+```{r}
+probka[probka$mother_edu == "-1", "mother_edu"] <- NA
+probka[probka$father_edu == "-1", "father_edu"] <- NA
+probka$edu_min <- as.character(pmin(as.numeric(as.character(probka$father_edu)), as.numeric(as.character(probka$mother_edu)), na.rm = TRUE))
+probka[is.na(probka$edu_min), "edu_min"] <- "-1"
+probka$edu_min <- as.factor(probka$edu_min)
+probka$edu_min <- relevel(probka$edu_min, ref = "0")
+probka$edu_max <- as.character(pmax(as.numeric(as.character(probka$father_edu)), as.numeric(as.character(probka$mother_edu))))
+probka[is.na(probka$edu_max), "edu_max"] <- "-1"
+probka$edu_max <- as.factor(probka$edu_max)
+probka$edu_max <- relevel(probka$edu_max, ref = "6")
+model <- lm(time.log ~ score*(task + edu_resources + no_of_books + wealth + book_id + edu_max) + edu_min + female + country, data = probka)
+nowy <- c(AIC = AIC(model), BIC = BIC(model))
+coefs <- coefs_score(model$coefficients)
+ggplot(coefs[grep("edu_max", coefs$variable), ], aes(y = beta_score, x = variable)) + geom_bar(stat = "identity") + facet_wrap(~ score) + theme(axis.text.x=element_text(angle = 45, hjust = 1)) + ggtitle("Parametry dla zmiennej edu_max")
+ggplot(coefs[grep("edu_min", coefs$variable), ], aes(y = beta_score, x = variable)) + geom_bar(stat = "identity") + facet_wrap(~ score) + theme(axis.text.x=element_text(angle = 45, hjust = 1)) + ggtitle("Parametry dla zmiennej edu_min")
+```
+
+Na powy¿szym wykresie widzimy, ¿e ró¿nice oszacowañ parametrów dla kategorii zmiennej `edu_max` s¹ doœæ ma³e, a uznanie zale¿noœci za monotoniczn¹ nie by³oby du¿ym uproszczeniem, wiêc to w³aœnie robimy poni¿ej (w ten sposób ten nowy model jest ca³kowicie analogiczny do wyjœciowego, gdy¿ mamy jedn¹ zmienn¹ kodowan¹ iloœciowo i jedn¹ jakoœciowo). Warto zauwa¿yæ, ¿e w przypadku `edu_min` nie widaæ ¿adnej monotonicznoœci oszacowañ -- jest to znacznie wyraŸniejsze ni¿ dla wykszta³cenia matki w wyjœciowym modelu.
+
+```{r}
+probka$edu_max_na <- probka$edu_max == "-1"
+probka$edu_max_num <- as.numeric(as.character(probka$edu_max))
+probka[probka$edu_max_num == -1, "edu_max_num"] <- mean(probka[probka$edu_max_num != -1, "edu_max_num"])
+model <- lm(time.log ~ score*(task + edu_resources + no_of_books + wealth + book_id + edu_max_num + edu_max_na) + edu_min + female + country, data = probka)
+data.frame(stary = crit_base, nowy = nowy, nowy_max_num = c(AIC = AIC(model), BIC = BIC(model)))
+```
+
+Z powy¿szej tabeli kryteriów informacyjnych wynika, ¿e uwzglêdnienie minimalnego i maksymalnego wykszta³cenia rodziców nie polepsza modelu w stosunku do tego uwzglêdniaj¹cego wykszta³cenie matki i ojca (wed³ug ¿adnego z kryteriów), zatem powracamy do poprzedniej wersji modelu.
+
+# Transformacja zmiennej zale¿nej
+
+## Reszty modelu wyjœciowego
+
+Na poni¿szym wykresie prezentujemy rozk³ad reszt modelu wyjœciowego w porównaniu do rozk³adu normalnego (skoœnoœæ wynosi `r skewness(modelBase$residuals)`, a kurtoza `r kurtosis(modelBase$residuals)`). W modelu tym zastosowaliœmy transformacjê logarytmiczn¹ z przesuniêciem 0.4108118.
+
+```{r}
+rm(model, df, coefs)
+crit_base <- c(AIC = AIC(modelBase), BIC = BIC(modelBase))
+ggplot(data.frame(reszty = modelBase$residuals), aes(x = reszty)) + geom_histogram(aes(y=..density..), binwidth = 0.1, color = "black", fill = "white") + stat_function(fun = dnorm, args = list(mean = mean(modelBase$residuals), sd = sd(modelBase$residuals)), color = "blue", size = 1) + ggtitle("Rozk³ad reszt modelu wyjœciowego")
+qqPlot(modelBase$residuals)
+ad.test(modelBase$residuals)
+```
+
+## Transformacja Boxa-Coxa
+
+Poni¿ej przedstawiamy wykres log-wiarygodnoœci modelu w zale¿noœci od zastosowanej transformacji Boxa-Coxa.
+
+```{r}
+modelBase <- lm(time ~ score*(task + edu_resources + no_of_books + wealth + book_id + father_edu_num + father_edu_na) + mother_edu + female + country, data = probka)
+bc <- boxcox(modelBase, plotit = TRUE); rm(modelBase)
+wykladnik <- bc$x[which.max(bc$y)] # optymalny wyk³adnik
+```
+
+Optymalny wyk³adnik (spoœród rozpatrywanej siatki wyk³adników) dla tej transformacji wynosi `r wykladnik`. Poni¿ej przedstawiamy graficznie rozk³ad reszt modelu po takiej transformacji:
+
+```{r}
+probka$time.bc <- probka$time^wykladnik
+modelBase_bc <- lm(time.bc ~ score*(task + edu_resources + no_of_books + wealth + book_id + father_edu_num + father_edu_na) + mother_edu + female + country, data = probka)
+ggplot(data.frame(reszty = modelBase_bc$residuals), aes(x = reszty)) + geom_histogram(aes(y=..density..), binwidth = 0.05, color = "black", fill = "white") + stat_function(fun = dnorm, args = list(mean = mean(modelBase_bc$residuals), sd = sd(modelBase_bc$residuals)), color = "blue", size = 1) + ggtitle("Rozk³ad reszt modelu wyjœciowego po transformacji Boxa-Coxa")
+qqPlot(modelBase_bc$residuals)
+data.frame(wyjsciowy = crit_base, nowy = c(AIC = AIC(modelBase_bc), BIC = BIC(modelBase_bc)))
+```
+
+Co ciekawe, patrz¹c na wykresy wydaje siê, ¿e dopasowanie reszt modelu po transformacji Boxa-Coxa do rozk³adu normalnego jest gorsze, ni¿ w modelu wyjœciowym (potwierdza to równie¿ wysoka kurtoza `r kurtosis(modelBase_bc$residuals)`, choæ skoœnoœæ jest trochê lepsza: `r skewness(modelBase_bc$residuals)`), jednak kryteria informacyjne s¹ znacznie ni¿sze w przypadku tego modelu. Niezmiennie jednak odrzucamy hipotezê zerow¹ o normalnoœci reszt w teœcie Andersona-Darlinga:
+
+```{r}
+ad.test(modelBase_bc$residuals); rm(modelBase_bc) # test Andersona Darlinga
+```
+
+## Transformacja logarytmiczna z przesuniêciem
+
+Poni¿ej przedstawiamy wykres log-wiarygodnoœci modelu w zale¿noœci od przesuniêcia zastosowanego przed wykonaniem transformacji logarytmicznej.
+
+```{r}
+modelBase <- lm(time ~ score*(task + edu_resources + no_of_books + wealth + book_id + father_edu_num + father_edu_na) + mother_edu + female + country, data = probka)
+lt <- logtrans(modelBase, alpha = seq(0.01, 0.5, by = 0.03), plotit = TRUE); rm(modelBase)
+przesuniecie <- lt[[1]][which.max(lt[[2]])] # optymalne przesuniêcie
+```
+
+Optymalne przesuniêcie (spoœród rozpatrywanej siatki przesuniêæ) dla transformacji logarytmicznej wynosi `r przesuniecie`, a reszty po jej zastosowaniu maj¹ nastêpuj¹cy rozk³ad:
+
+```{r}
+probka$time.log2 <- log(probka$time + przesuniecie)
+modelBase_lt <- lm(time.log2 ~ score*(task + edu_resources + no_of_books + wealth + book_id + father_edu_num + father_edu_na) + mother_edu + female + country, data = probka)
+ggplot(data.frame(reszty = modelBase_lt$residuals), aes(x = reszty)) + geom_histogram(aes(y=..density..), binwidth = 0.1, color = "black", fill = "white") + stat_function(fun = dnorm, args = list(mean = mean(modelBase_lt$residuals), sd = sd(modelBase_lt$residuals)), color = "blue", size = 1) + ggtitle("Rozk³ad reszt modelu wyjœciowego po transformacji logarytmicznej z przesuniêciem")
+qqPlot(modelBase_lt$residuals)
+data.frame(wyjsciowy = crit_base, nowy = c(AIC = AIC(modelBase_lt), BIC = BIC(modelBase_lt)))
+```
+
+Jak widaæ, dopasowanie rozk³adu normalnego do rozk³adu naszej zmiennej po nowej transformacji jest podobne do tej z modelu wyjœciowego, dla którego przesuniêcie wynios³o 0.4108118, czyli niewiele mniej. Choæ kryteria informacyjne s¹ w tym przypadku znacznie wy¿sze ni¿ przy transformacji Boxa-Coxa, to graficznie dopasowanie reszt do rozk³adu normalnego wydaje siê lepsze i potwierdzaja to, jak wczeœniej, kurtoza `r kurtosis(modelBase_lt$residuals)`, ale nie skoœnoœæ `r skewness(modelBase_lt$residuals)`. Wci¹¿ nie udaje nam siê spe³niæ za³o¿enia o normalnoœci rozk³adu reszt:
+
+```{r}
+ad.test(modelBase_lt$residuals); rm(modelBase_lt) # test Andersona Darlinga
+```
+
+## Wybór transformacji
+
+Ostatecznie, maj¹c do wyboru:
+
+- transformacjê Boxa-Coxa, która prowadzi do prawie piêciokrotnie ni¿szych kryteriów informacyjnych i reszt niemal symetrycznych lecz trochê spiczastych
+
+- transformacjê logarytmiczn¹ z przesuniêciem, która prowadzi do wysokich kryteriów informacyjnych, dwa razy bardziej skoœnych reszt o spiczastoœci niemal¿e równej rozk³adowi normalnemu,
+
+decydujemy siê na lepsze dopasowanie modelu do danych, a wiêc wybieramy na podstawie kryteriów informacyjnych transformacjê Boxa-Coxa, co prowadzi do nastêpuj¹cego modelu:
+
+```{r}
+modelBase <- lm(time.bc ~ score*(task + edu_resources + no_of_books + wealth + book_id + father_edu_num + father_edu_na) + mother_edu + female + country, data = probka)
+save(probka, file = "Projekt_probka.rda") # Zapisujemy ostateczn¹ próbkê
+anova(modelBase)
+```

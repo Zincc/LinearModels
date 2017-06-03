@@ -1,0 +1,418 @@
+---
+title: "Etap 5: Interakcje"
+output: 
+    html_document:
+        toc: true
+        toc_depth: 3
+        toc_float: true
+        number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warnings=FALSE, messages=FALSE, cache=TRUE)
+library(data.table)
+library(ggplot2)
+library(reshape2)
+library(rworldmap)
+library(stringr)
+library(RColorBrewer)
+library(agricolae)
+```
+
+# Podsumowanie wyników
+
+W tej części zbadaliśmy interakcje wybranych zmiennych. W szczególności przeanalizowaliśmy interakcje pomiędzy wykształceniami rodziców, interakcje pomiędzy płcią a krajem, oraz interakcje różnych zmiennych z punktacją za zadanie. 
+
+W przypadku wykształcenia rodziców za pomocą regresji segmentowej zbadaliśmy trend wpływu na czas rozwiązywania zadania. Odkryliśmy że im bardziej wykształceni są rodzice, tym dłużej uczeń rozwiązuje zadanie. Zachodzi tutaj bardzo silna interakcja: W przypadku jednego rodzica bez wykształcenia, wykształcenie drugiego ma pozytywny wpływ na czas rozwiązywania, ale w przypadku wysokiego wykształcenia u dowolnego rodzica, im większe wykształcenie drugiego tym dłuższy czas rozwiązywania zadania. Uczennice są wyraźnie bardziej podatne na ten efekt niż uczniowie.
+
+Zbadaliśmy gender gap w czasach rozwiązywania zadań, czyli różnicę pomiędzy czasami rozwiązywania zadań przez uczniów oraz uczennice w różnych krajach. W krajach Ameryki łacińskiej uczennice rozwiązują zadania nieco szybciej niż uczniowie; Podobnie w niektóych krajach Europy zachodniej, m.in. w Niemczech. W niektórych krajach, m.in. w Katarze i na Słowacji, uczniowie rozwiązują zadania zdecydowanie szybciej niż uczennice. Różnice na korzyść uczennic są dużo mniejsze niż różnice na korzyść uczniów - rozkład gender gap jest skośny ze względu na obecność kilku krajów silnie "nieprzychylnych" uczennicom, takich jak Słowacja. 
+
+Te interakcje wyjaśniają mało zmienności w danych, więc pomimo tego że są ciekawe, nie uwzględnimy ich w dalszych etapach. Najważniejszymi interakcjami są te z punktacją rozwiązania. 
+
+Za pomocą kryterium BIC wybraliśmy interakcje najważniejsze z punktu widzenia wyjaśnienia zmienności, i uwzględnimy je na dalszych etapach. Są to interakcje punktacji z następującymi zmiennymi: numer zadania, wskaźnik zasobów edukacyjnych w domu, wskaźnik zamożności, liczba książek w domu oraz wykształcenie ojca. Część wybranych interakcji zbadaliśmy na końcu raportu. 
+
+
+# Ładowanie danych i transformacja czasu
+
+```{r}
+pelne.dane <- fread("Curated_full_data.csv", sep=",", header=TRUE, stringsAsFactors = TRUE)
+wybrane.szkoly <- fread("Chosen_schools.csv", sep=",", header=TRUE, stringsAsFactors = TRUE)
+wybrane.szkoly <- factor(unlist(wybrane.szkoly))
+probka <- pelne.dane[pelne.dane$CNTSCHID %in% wybrane.szkoly, ]
+probka <- as.data.frame(probka)
+for(i in 1:ncol(probka)){
+  if(is.factor(probka[,i])) probka[,i] <- factor(probka[,i])  # uaktualnienie poziomow
+}
+probka$CNT <- relevel(probka$CNT, ref="POL")
+probka$MISCED <- relevel(probka$MISCED, ref="0")
+probka$FISCED <- relevel(probka$FISCED, ref="0")
+probka$IMMIG <- relevel(probka$IMMIG, ref="1")
+probka$S <- relevel(probka$S, ref="No credit")
+probka$ST012Q09NA <- relevel(probka$ST012Q09NA, ref="1")
+probka$ST013Q01TA <- relevel(probka$ST013Q01TA, ref="1")
+probka$ST012Q06NA <- relevel(probka$ST012Q06NA, ref="1")
+probka$ST123Q04NA <- relevel(probka$ST123Q04NA, ref="1")
+probka$ST011Q02TA <- relevel(probka$ST011Q02TA, ref="1")
+probka$ST119Q04NA <- relevel(probka$ST119Q04NA, ref="1")
+probka$ST062Q03TA <- relevel(probka$ST062Q03TA, ref="1")
+probka$time.log <- log(probka$time + 0.4108118)
+rm(pelne.dane)
+gc()
+```
+
+# Interakcje wykształcenia rodziców
+
+Sprawdzimy istotność interakcji wykształcenia matki i ojca.
+
+```{r}
+interaction.plot(relevel(probka$FISCED, ref='-1'), relevel(probka$MISCED, ref='-1'), probka$time.log, fixed=T, col=rainbow(length(levels(probka$MISCED))), lty=rep(1:2, length(levels(probka$MISCED))))
+```
+
+Wykres wskazuje że mogą występować interakcje.  
+
+```{r}
+edu.example <- data.frame("MISCED" = factor(probka$MISCED[probka$MISCED %in% c("0", "6")]), "FISCED" = factor(probka$FISCED[probka$MISCED %in% c("0", "6")]), "time.log" = probka$time.log[probka$MISCED %in% c("0", "6")])
+interaction.plot(edu.example$FISCED, edu.example$MISCED, edu.example$time.log)
+```
+
+
+
+```{r}
+edu.full <- lm(time.log ~ FISCED*MISCED, data=probka)
+edu.sep <- lm(time.log ~ FISCED + MISCED, data=probka)
+anova(edu.full)
+anova(edu.full, edu.sep)
+```
+
+Test maximum likelihood pokazuje że interakcja jest zauważalna statystycznie. 
+
+```{r}
+AIC(edu.full, k=log(nrow(probka))) - AIC(edu.sep, k=log(nrow(probka)))
+AIC(edu.full, k=2) - AIC(edu.sep, k=2)
+```
+
+Kryterium BIC odrzuca interakcję, a kryterium AIC nie; w obu przypadkach różnica w informacji jest bardzo niewielka. 
+
+Dla matek bez wykształcenia czas rozwiązywania maleje wraz z wykształceniem ojca, ale dla matek z najwyższym wykształceniem czas rośnie wraz z wykształceniem ojca. Najlepsze czasy rozwiązywania uzyskują uczniowe którzy nie odpowiedzieli na pytanie o wykształcenie matki; uczniowie ci radzą sobie tym lepiej, im lepiej wykształcony jest ojciec. 
+
+Ponieważ zmienne mają dużo poziomów, zbadamy trend zależności poprzez przyjęcie że wykształcenia są zmiennymi numerycznymi. Dzięki temu będziemy mogli odpowiedzieć na pytanie, czy ogólnie rzecz biorąc wykształcenie rodziców ma pozytywny, czy negatywny wpływ na czasy rozwiązywania zadań. Uwzględnimy osobno poziom "-1" poprzez regresję segmentową. 
+
+```{r}
+probka$FISCED.int <- as.integer(as.character(probka$FISCED))
+probka$FISCED.na <- factor(probka$FISCED == -1)
+probka$FISCED.na <- relevel(probka$FISCED.na, ref="TRUE")
+probka$MISCED.int <- as.integer(as.character(probka$MISCED))
+probka$MISCED.na <- factor(probka$MISCED == -1)
+probka$MISCED.na <- relevel(probka$MISCED.na, ref="TRUE")
+edu.full.int <- lm(time.log ~ FISCED.na/FISCED.int + MISCED.na/MISCED.int + FISCED.na:MISCED.na:FISCED.int:MISCED.int, data=probka)
+edu.sep.int <- lm(time.log ~ FISCED.na/FISCED.int + MISCED.na/MISCED.int, data=probka)
+summary(edu.full.int)
+summary(edu.sep.int)
+anova(edu.full.int, edu.sep.int)
+```
+
+
+
+```{r}
+edu.plot.data <- tapply(probka$time.log, list(probka$FISCED, probka$MISCED), mean)
+edu.plot.data<- melt(edu.plot.data, varnames=c("FISCED.int", "MISCED.int"), value.name="time.log")
+edu.plot.data$MISCED.na <- factor(edu.plot.data$MISCED.int == -1)
+edu.plot.data$MISCED.na <- relevel(edu.plot.data$MISCED.na, ref="TRUE")
+edu.plot.data$FISCED.na <- factor(edu.plot.data$FISCED.int == -1)
+edu.plot.data$FISCED.na <- relevel(edu.plot.data$FISCED.na, ref="TRUE")
+edu.plot.data <- cbind(edu.plot.data[,-3], "time.log"=edu.plot.data[,3])
+edu.plot.data$time.pred <- predict(edu.full.int, edu.plot.data[,1:4])
+edu.plot.data$time.pred2 <- predict(edu.sep.int, edu.plot.data[,1:4])
+#edu.plot.data$FISCED <- factor(edu.plot.data$FISCED)
+#edu.plot.data$MISCED <- factor(edu.plot.data$MISCED)
+ggplot(data=edu.plot.data) + geom_line(aes(x=FISCED.int, y=time.log)) + geom_line(aes(x=FISCED.int, y=time.pred), col=I("red")) + geom_line(aes(x=FISCED.int, y=time.pred2), col=I("blue"), lty=3) + facet_wrap(~MISCED.int, ncol = 4, labeller="label_both") 
+ggplot(data=edu.plot.data) + geom_line(aes(x=MISCED.int, y=time.log)) + geom_line(aes(x=MISCED.int, y=time.pred), col=I("red")) + geom_line(aes(x=MISCED.int, y=time.pred2), col=I("blue"), lty=3) + facet_wrap(~FISCED.int, ncol = 4, labeller="label_both") 
+```
+
+Widać że trend odwraca odwraca się w stosunku do przerywanej niebieskiej linii, oznaczającej wyniki bez interakcji. Uwzględnienie interakcji pozwoliło na zauważenie że czas rozwiązywania dla matek bez wykształcenia jest tym lepszy, im lepsze wykształcenie ojca, a dla matek z najlepszym wykształceniem jest tym lepszy, im mniejsze wykształcenie ojca. 
+
+Powyższy model został zbudowany tylko w oparciu o wykształcenie. Rozpatrzmy teraz pełny model, żeby zweryfikować wyniki. Do pełnego modelu wybierzemy zmienne które miały największy wpływ na wyniki w poprzedniej części (`ST013Q01TA`: liczba książek w domu)
+
+```{r}
+full.model <- lm(time.log ~ task + HEDRES + CNT + ST013Q01TA + WEALTH + BOOKID + gender +  FISCED.na/FISCED.int + MISCED.na/MISCED.int + FISCED.na:MISCED.na:FISCED.int:MISCED.int, data=probka)
+anova(full.model)
+coef(full.model)[(length(coef(full.model))-2):length(coef(full.model))]
+```
+
+O ile interakcja nadal jest istotna, to zależność czasu rozwiązywania od wykształcenia ojca stała się niezauważalna. Oznacza to że pewne zmienne są niezbalansowane w poszczególnych grupach wykształcenia rodziców, i wyjaśniają czas rozwiazywania lepiej niż wykształcenie ojca. Wykształcenie ojca ma jednak wpływ poprzez interakcję, zatem wpływ jest tym silniejszy im lepiej wykształcona jest matka. 
+
+Przedstawmy teraz zależnosć graficznie, ustalając pozostałe zmienne na poziomach referencyjnych.
+
+```{r}
+edu.plot.data <- tapply(probka$time.log, list(probka$FISCED.int, probka$MISCED.int), mean) # Obliczamy ponownie po konwersji do numeric
+edu.plot.data <- melt(edu.plot.data, varnames=c("FISCED.int", "MISCED.int"), value.name="time.log")
+edu.plot.data$MISCED.na <- factor(edu.plot.data$MISCED.int == -1)
+edu.plot.data$MISCED.na <- relevel(edu.plot.data$MISCED.na, ref="TRUE")
+edu.plot.data$FISCED.na <- factor(edu.plot.data$FISCED.int == -1)
+edu.plot.data$FISCED.na <- relevel(edu.plot.data$FISCED.na, ref="TRUE")
+full.predict <- predict(full.model, cbind(edu.plot.data[,-3], 
+                                          'task'= levels(probka$task)[1],
+                                          'HEDRES'= 0, 
+                                          'WEALTH' = 0,
+                                          'CNT'= levels(probka$CNT)[1], 
+                                          'gender'= levels(probka$gender)[1],
+                                          'BOOKID' = levels(probka$BOOKID)[1],
+                                          'ST013Q01TA' = levels(probka$ST013Q01TA)[1]))
+#full.predict <- predict(full.model)
+#time.pred <- tapply(full.predict, list(probka$FISCED, probka$MISCED), mean)
+#time.pred <- melt(time.pred, varnames = c("FISCED", "MISCED"), value.name="time.pred")
+#edu.plot.data$time.pred <- time.pred$time.pred
+edu.plot.data$time.pred <- full.predict - mean(full.predict) + mean(edu.plot.data$time.log)
+ggplot(data=edu.plot.data) + geom_line(aes(x=FISCED.int, y=time.log)) + geom_line(aes(x=FISCED.int, y=time.pred), col=I("red")) + facet_wrap(~MISCED.int, ncol=4, labeller="label_both") + ggtitle("Trend w zależności czasu rozwiązywania od wykształcenia rodziców", sub="Zmienne wykształcenie ojca przy kontrolowanym poziomie wykształcenia matki")
+ggplot(data=edu.plot.data) + geom_line(aes(x=MISCED.int, y=time.log)) + geom_line(aes(x=MISCED.int, y=time.pred), col=I("red")) + facet_wrap(~FISCED.int, ncol=4, labeller="label_both") + ggtitle("Trend w zależności czasu rozwiązywania od wykształcenia rodziców", sub="Zmienne wykształcenie matki przy kontrolowanym poziomie wykształcenia ojca")
+```
+
+W pełnym modelu widać że w przypadku `MISCED = 0` zmienny poziom wykształcenia ojca nie wpływa na czas rozwiązywania zadań, zgodnie z brakiem istotności tej zmiennej. Wykształcenie ojca bardzo silnie wzmacnia "zły wpływ" wykształcenia matki. 
+
+Należy pamiętać, że trend jest opisany trzema parametrami wyestymowanymi dla wszystkich poziomów: zależnością od wykształceń ojca, matki, i interakcją. Opisuje on zatem ogólną zależność, która może być niezgodna dla poszczególnych wartości zmiennych. 
+
+Po zbadaniu trendów, w dalszym ciągu będziemy traktować wykształcenia jako zmienne kategoryczne.
+
+```{r}
+rm(edu.full, edu.full.int, edu.sep, edu.sep.int, full.model, edu.plot.data, edu.example, time.full, full.predict)
+gc()
+```
+
+# Interakcje wykształcenia rodziców z punktacją za zadanie
+
+Możliwe że szybkie rozwiązywanie zadań przez uczniów ze słabo wykształconymi rodzicami nie wynika z lepszego przygotowania, tylko z tego że ci uczniowie częściej strzelają. Rozpatrzmy dodatkowo interakcję z wynikiem zadania, żeby zweryfikować tę hipotezę.
+
+```{r}
+score.model <- lm(time.log ~ S*FISCED*MISCED, data=probka)
+anova(score.model)
+```
+
+ANOVA wskazuje że interakcje punktacji z wykształceniem są istotne. 
+
+```{r}
+# UWAGA: Nie wszystkie poziomy mają obserwacje!
+score.plot.data <- tapply(probka$time.log, list(probka$FISCED, probka$MISCED, probka$S), mean) 
+score.plot.data <- melt(score.plot.data, varnames=c("FISCED", "MISCED", "S"), value.name="time.log")
+score.plot.data$S <- factor(score.plot.data$S)
+ggplot(data=score.plot.data) + geom_line(aes(x=FISCED, y=time.log, color=S)) + facet_wrap(~MISCED, ncol=4, labeller="label_both") + ggtitle("Zależność czasu rozwiązywania od wykształcenia rodziców", sub="Zmienne wykształcenie ojca przy kontrolowanym poziomie wykształcenia matki") 
+ggplot(data=score.plot.data) + geom_line(aes(x=MISCED, y=time.log, color=S)) + facet_wrap(~FISCED, ncol=4, labeller="label_both") + ggtitle("Zależność czasu rozwiązywania od wykształcenia rodziców", sub="Zmienne wykształcenie matki przy kontrolowanym poziomie wykształcenia ojca")
+```
+
+Efekt punktacji wydaje się addytywny, nie widać jednoznacznych zmian trendów. Zależność jest trudna do zinterpretowania ze względu na dużą liczbę poziomów zmiennych oraz brakujące obserwacje dla niektórych grup, w szczególności "Partial credit". Z tego powodu przyjrzymy się tej zależności bliżej po przekodowaniu poziomów wykształcenia w następnym etapie. 
+
+```{r}
+rm(score.int, score.model, full.predict, score.plot.data)
+gc()
+```
+
+# Interakcje wykształcenia rodziców z płcią dziecka
+
+Wykształcenie rodziców może mieć rózny wpływ na dziecko w zależności od jego płci. Zbudujmy najpierw model pomocniczy do zweryfikowania tej hipotezy.
+
+```{r}
+gender.model <- lm(time.log ~ gender*FISCED*MISCED, data=probka)
+anova(gender.model)
+```
+
+Model wskazuje że interakcje rzeczywiście występują. Przyjrzyjmy się trendom, korzystając z formuły z poprzedniej sekcji.
+
+```{r}
+gender.int.model <- lm(time.log ~ task + HEDRES + CNT + ST013Q01TA + WEALTH + BOOKID + gender*(FISCED.na/FISCED.int + MISCED.na/MISCED.int + FISCED.na:MISCED.na:FISCED.int:MISCED.int), data=probka)
+anova(gender.int.model)
+coef(gender.int.model)[(length(coef(gender.int.model))-5):length(coef(gender.int.model))]
+```
+
+
+```{r}
+
+gender.plot.data <- tapply(probka$time.log, list(probka$FISCED.int, probka$MISCED.int, probka$gender), mean)
+gender.plot.data <- melt(gender.plot.data, varnames=c("FISCED.int", "MISCED.int", "gender"), value.name="time.log")
+gender.plot.data$MISCED.na <- factor(gender.plot.data$MISCED.int == -1)
+gender.plot.data$MISCED.na <- relevel(gender.plot.data$MISCED.na, ref="TRUE")
+gender.plot.data$FISCED.na <- factor(gender.plot.data$FISCED.int == -1)
+gender.plot.data$FISCED.na <- relevel(gender.plot.data$FISCED.na, ref="TRUE")
+gender.plot.data$gender <- factor(gender.plot.data$gender)
+time.pred <- predict(gender.int.model, cbind(gender.plot.data[,-4], 
+                                       'task'= levels(probka$task)[1],
+                                       'HEDRES'= 0, 
+                                       'WEALTH' = 0,
+                                       'CNT'= levels(probka$CNT)[1],
+                                       'BOOKID' = levels(probka$BOOKID)[1],
+                                       'ST013Q01TA' = levels(probka$ST013Q01TA)[1]))
+gender.plot.data$time.pred <- time.pred - mean(time.pred) + mean(gender.plot.data$time.log)
+ggplot(data=gender.plot.data) + geom_line(aes(x=FISCED.int, y=time.log, color=gender), lty=3) + geom_line(aes(x=FISCED.int, y=time.pred, color=gender)) + facet_wrap(~MISCED.int, ncol=4, labeller = "label_both") +  ggtitle("Trend zależności od wykształcenia rodziców i płci ucznia", sub="Zmienne wykształcenie ojca przy kontrolowanym poziomie wykształcenia matki")
+ggplot(data=gender.plot.data) + geom_line(aes(x=MISCED.int, y=time.log, color=gender), lty=3) + geom_line(aes(x=MISCED.int, y=time.pred, color=gender)) + facet_wrap(~FISCED.int, ncol=4, labeller = "label_both") + ggtitle("Trend zależności od wykształcenia rodziców i płci ucznia", sub="Zmienne wykształcenie matki przy kontrolowanym poziomie wykształcenia ojca")
+```
+
+Uczniowie którzy nie odpowiedzieli na pytanie o matkę mają zdecydowanie lepsze rezultaty jeśli ich ojciec jest dobrze wykształcony. Podobny efekt występuje dla uczennic, ale jest słabszy. Co ciekawe, nie ma takiej zależności dla uczennic ani uczniów którzy nie odpowiedzieli na pytanie o ojca.
+
+W przypadku niewykształconej matki (`MISCED=0`), wykształcenie ojca ma korzystny wpływ na czas rozwiązywania zadań dla obu płci, ale bardziej korzysny dla uczennic W przypadku dobrze wykształconego ojca (`FISCED = 6`) wpływ wykształcenia matki na czas rozwiązywania zadań jest nieznaczny dla uczniów, a zdecydowanie większy dla uczennic. 
+
+Wartości statystyki F dla interakcji są niewielkie w porównaniu z pozostałymi zmiennymi, dlatego pominiemy te interakcje na dalszych etapach. 
+
+```{r}
+rm(gender.plot.data, time.pred, gender.int.model, gender.model)
+gc()
+```
+
+# Interakcja płeć - kraj
+
+Ze względu na różnice kulturowe, w różnych krajach możemy spodziewać się różnych zależności od płci.
+
+```{r}
+cnt.model <- lm(time.log ~ gender*CNT, data=probka)
+anova(cnt.model)
+```
+
+Zależność jest zauważalna statystycznie, ale ma bardzo niewielką wartość statystyki F, zatem wyjaśnia mało zmienności w danych. Pomimo tego warto przyjrzeć się bliżej tej interakcji, ponieważ jest interesująca sama w sobie. Stwórzmy zatem pełny model.
+
+```{r}
+full.model <- lm(time.log ~  task + HEDRES + CNT + ST013Q01TA + WEALTH + BOOKID + FISCED + MISCED + gender*CNT, data=probka)
+anova(full.model)
+```
+
+Poniższa mapa przedstawia czasy rozwiązywania zadań przez uczniów w porównaniu z uczennicami. Im bardziej żółty kraj, tym większy "gender gap" na korzyść uczniów w porównaniu z Polską; kolor czerwony oznacza różnicę na korzyść uczennic.
+
+```{r}
+cnt.time <- data.frame("Kraj" = levels(probka$CNT))
+# poziom gender2 to bazowy gender gap dla Polski (nie ma interakcji płci z Polską), więc wstawiamy 0
+cnt.time$Interakcja <- c(0, coef(full.model)[sapply(cnt.time$Kraj[-1], function(x) 
+                                             grep(str_c(x, ":gender"), names(coef(full.model))))])
+# Dodajemy bazowy gender gap
+cnt.time$Interakcja <- cnt.time$Interakcja + coef(full.model)["gender2"]
+malMap <- joinCountryData2Map(cnt.time, joinCode = "ISO3",
+  nameJoinColumn = "Kraj")
+pal <- brewer.pal(11, name="RdBu")[1:8]
+# as.hexmode(as.integer(as.hexmode('FFFFFF')) - as.integer(as.hexmode('92C5DE')))
+mapParams <- mapCountryData(malMap, nameColumnToPlot="Interakcja", colourPalette=pal, catMethod = "pretty",
+  missingCountryCol = gray(0.8), mapTitle="Gender gap", lwd=0.4, borderCol="black", addLegend=F)
+do.call(addMapLegend, c(mapParams, legendLabels='all'))
+```
+
+Na powyższej mapie kolor niebieski oznacza że uczennice rozwiązują zadania szybciej niż uczniowie, a czerwony - że wolniej. Widać że w większości krajów różnice są dość nieznaczne, zawierają się w przedziale od `-0.04` do `0.04` przy standardowym odchyleniu w populacji równym `sd(probka$time.log)`. W niektórych krajach jednak czas wypada zdecydowanie na niekorzyść uczennic, np. w Katarze i na Słowacji. Kraje te wyraźnie odstają na poniższym histogramie:
+
+```{r}
+qplot(cnt.time$Interakcja, main="Rozkład gender gap", binwidth=0.01, xlab="Gender gap")
+```
+
+Widać, że w większości krajów są większe różnice pomiędzy uczniami a uczennicami niż w Polsce (gender gap równy `r coef(full.model)['gender2']`), najczęściej na korzyść uczniów. Jednakże w wielu krajach Ameryki południowej oraz niektórych krajach Europy zachodniej uczennice radzą sobie lepiej niż uczniowie.
+
+W dalszym ciągu pominiemy tę interakcję, ponieważ wyjaśnia bardzo mało zmienności w danych. 
+
+```{r}
+rm(cnt.time, cnt.gender, cnt.model, full.model, malMap, mapParams, time.pred)
+gc()
+```
+
+# Interakcje zasobów edukacyjnych i płci
+
+Zbadamy, czy któraś z płci jest bardziej podatna na korzystanie z zasobów edukacyjnych.
+
+```{r}
+hedres.model <- lm(time.log ~ HEDRES*gender, data=probka)
+anova(hedres.model)
+```
+
+Różnice są bardzo nieznaczne, więc nie będziemy rozpatrywać tej interakcji.
+
+```{r}
+rm(hedres.model)
+```
+
+
+# Interakcje zasobów edukacyjnych i wskaźnika zamożności
+
+```{r}
+hd.we.model <- lm(time.log ~ HEDRES*WEALTH, data=probka)
+anova(hd.we.model)
+```
+
+Wartość statystyki F jest bardzo niewielka, więc nie uwzględnimy tej interakcji. 
+
+```{r}
+rm(hd.we.model)
+```
+
+# Interakcje zmiennych z punktacją
+
+Z punktu widzenia interpretacji wyników najważniejszą interakcją jest interakcja z wynikiem zadania. W poprzednich etapach odkryliśmy, że w przypadku niektórych zadań rozkład czasu rozwiązywania jest dwumodalny. Może to być powodowane tym, że niektórzy uczniowie strzelają zamiast odpowiadać na pytania; Spodziewamy się, że uwzględnienie punktacji wykryje strzelców.
+
+Przeprowadzimy wybór modelu za pomocą kryterium BIC. Rmarkdown nie kompiluje poniższego kodu ponieważ brakuje pamięci, więc wyniki podamy w tekście.
+
+```{r, eval=FALSE}
+modelBase <- lm(time.log ~ S*(task + HEDRES + ST013Q01TA + WEALTH + BOOKID + FISCED*MISCED + gender) + CNT, data = probka)
+anova(modelBase)
+cat("AIC: ", AIC(modelBase), " BIC: ", BIC(modelBase), '\n')
+rm(modelBase)
+gc()
+```
+
+AIC wynosi `1400506`, a BIC `1407132`. 
+
+Usuńmy interakcje które mają małą wartość statystyki F.
+
+```{r, eval=FALSE}
+modelBase <- lm(time.log ~ S*(task + HEDRES + ST013Q01TA + WEALTH + FISCED) + BOOKID + FISCED + MISCED + gender + CNT, data = probka)
+anova(modelBase)
+cat("AIC: ", AIC(modelBase), " BIC: ", BIC(modelBase), '\n')
+```
+
+AIC wynosi `1402306`, a BIC `1405653`. Na podstawie kryterium BIC wybieramy mniejszy model. 
+
+# Wizualizacja
+
+```{r}
+modelBase <- lm(time.log ~ S*(task + HEDRES + WEALTH), data = probka)
+```
+
+```{r}
+hedres.bins <- seq(min(probka$HEDRES), max(probka$HEDRES), by=0.1)
+hedres.plot.data <- data.frame("HEDRES"=rep(hedres.bins, length(levels(probka$S))), "S"=rep(levels(probka$S), each=length(hedres.bins)))
+hedres.plot.data$S <- factor(hedres.plot.data$S)
+hedres.plot.data$time.pred <- predict(modelBase, cbind(hedres.plot.data, 
+                                       'task'= levels(probka$task)[1],
+                                       'WEALTH' = 0,
+                                       'FISCED' = levels(probka$FISCED)[1],
+                                       'MISCED' = levels(probka$MISCED)[1],
+                                       'gender' = levels(probka$gender)[1],
+                                       'CNT'= levels(probka$CNT)[1],
+                                       'BOOKID' = levels(probka$BOOKID)[1],
+                                       'ST013Q01TA' = levels(probka$ST013Q01TA)[1]))
+ggplot(data=hedres.plot.data) + geom_line(aes(x=HEDRES, y=time.pred, col=S)) + xlab("HEDRES") + ggtitle("Zależność czasu rozwiązywania od zmiennej HEDRES")
+```
+
+Co ciekawe, w każdej grupie czas rozwiązywania rośnie wraz z większym wskaźnikiem zasobów edukacyjnych w domu. Największy wzrost jest widoczny wśród uczniów którzy dostali częściową punktację za zadanie. Dla uczniów którzy dostali pełną punktację wzrost również jest widoczny, ale bardzo nieznaczny.
+
+```{r}
+task.plot.data <- tapply(probka$time.log, list(probka$task, probka$S), mean)
+task.plot.data <- melt(task.plot.data, varnames=c("task", "S"), value.name = "time.log")
+task.plot.data$S <- factor(task.plot.data$S)
+task.plot.data$task <- factor(task.plot.data$task, levels=unique(task.plot.data$task[order(task.plot.data[task.plot.data$S == "Full credit", "time.log"])]))
+ggplot(data=task.plot.data) + geom_point(aes(x=task, y=time.log, col=S)) + ggtitle("Średnie czasy rozwiązywania poszczególnych zadań")
+ggplot(data=task.plot.data[task.plot.data$S %in% c("Full credit", "No credit"), ]) + geom_point(aes(x=task, y=time.log, col=S)) + ggtitle("Średnie czasy rozwiązywania poszczególnych zadań")
+```
+
+Punktacja częściowa wystąpiła tylko w przypadku jednego zadania: `M955`. W przypadku niektórych zadań błędne rozwiązanie zajmowało uczniom więcej czasu niż poprawne. 
+
+Przyjrzyjmy się bliżej czasom rozwiązania w zależności od punktacji:
+
+```{r}
+lsd <- LSD.test(modelBase, "S", p.adj = 'bonferroni', alpha=0.001)
+print(lsd)
+```
+
+Wszystkie grupy punktacji mają zauważalnie różne czasy rozwiązywania zadań. Wyraźnie odstaje tutaj punktacja częściowa ("Partial credit"); uczniowie którzy dostali częściową punktację rozwiązywali zadanie zdecydowanie dłużej niż ci którzy dostali pełną punktację (czas jest transformowany, więc na podstawie testu nie można precyzyjnie określić o ile dłużej). 
+
+Ci uczniowie, którzy rozwiązywali zadania poprawnie, robili to w bardzo podobnym czasie do tych którym nie udało się uzyskać żadnych punktów. Możemy się domyślać że zadania wymagały znajomości pewnych pojęć, dzięki którym można je było szybko rozwiązać, a uczniowie którzy nie znali tych pojęć musieli kombinować. 
+
+Wyniki pozornie są niezgodne z poprzednim wykresem obrazującym średnie czasy rozwiązywania poszczególnych zadań, ponieważ na wykresie wydaje się że w przypadku większości zadań czas potrzebny na otrzymanie pełnej punktacji jest na ogół większy niż czas potrzebny na błędne rozwiązanie zadania. Różnice wynikają z nierównomiernej liczby rozwiązań poszczególnych zadań:
+
+```{r}
+qplot(tapply(probka$time.log, probka$task, length), main="Liczby rozwiązań poszczególnych zadań", xlab="Liczby rozwiązań")
+```
+
+```{r}
+rm(modelBase)
+gc()
+```
+
