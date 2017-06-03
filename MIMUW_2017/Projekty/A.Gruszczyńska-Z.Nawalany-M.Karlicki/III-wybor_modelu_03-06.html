@@ -126,17 +126,30 @@ $(document).ready(function () {
 true
 </div>
 
+<div id="spis-tresci" class="section level1">
+<h1>Spis treści</h1>
+<p><a href="#1.Cel">1.Cel</a><br />
+<a href="#2.Podsumowanie%20etapu%20III">2.Podsumowanie</a><br />
+<a href="#3.Analiza%20istotności%20wybranych%20cech%20ucznia">3.Analiza istotności wybranych cech ucznia</a><br />
+<a href="#4.Model%20uwzględniający%20cechy%20zadania%20i%20cechy%20ucznia">4.Model uwzględniający cechy zadania i cechy ucznia</a><br />
+<a href="#5.Wniosek">5.Wniosek</a></p>
+</div>
 <div id="cel" class="section level1">
-<h1>Cel</h1>
-<p>Celem kolejnego etapu projektu jest uwzględnienie w modelu cech ucznia. Najpierw sprawdzimy wpływ wybranych cech na czas wykonania zadania, a następnie dodamy zmienne zweryfikowane na poprzednich etapach jako istotne i za pomocą metody regresji krokowej wykorzystującej kryterium AIC dokonamy selekcji zmiennych.</p>
-<p>Wybrane cechy ucznia, których istotność zbadamy to: - kraj kraj pochodzenia ucznia - plec płeć ucznia - wyksztalcenie_M ukończenie przez matkę ucznia uczelni wyższej - wyksztalcenie_O ukończenie przez ojca ucznia uczelni wyższej - jezyk tożsamość języka używanego przez ucznia na co dzień z językiem w jakim napisany był test - czytanieCzasopismNaukowych czytanie przez ucznia czasopism naukowych</p>
+<h1>1.Cel <a name="1.Cel"></a></h1>
+<p>Celem kolejnego etapu projektu jest uwzględnienie w modelu cech ucznia. Najpierw sprawdzimy wpływ wybranych cech na czas wykonania zadania, a następnie dodamy zmienne zweryfikowane na poprzednich etapach jako istotne i za pomocą kryterium BIC dokonamy selekcji zmiennych.</p>
+<p>Wybrane cechy ucznia, których istotność zbadamy to: * kraj kraj pochodzenia ucznia<br />
+* plec płeć ucznia<br />
+* wyksztalcenie_M ukończenie przez matkę ucznia uczelni wyższej<br />
+* wyksztalcenie_O ukończenie przez ojca ucznia uczelni wyższej<br />
+* jezyk tożsamość języka używanego przez ucznia na co dzień z językiem w jakim napisany był test<br />
+* czytanieCzasopismNaukowych czytanie przez ucznia czasopism naukowych</p>
 </div>
 <div id="podsumowanie" class="section level1">
-<h1>Podsumowanie</h1>
-<p>Na podstwie regresji krokowej wybrano model, uwzględniający zagnieżdżenie zadania w pozycji oraz wszystkie wyżej wymienione cechy ucznia.</p>
+<h1>2.Podsumowanie <a name="2.Podsumowanie"></a></h1>
+<p>Na podstwie regresji krokowej minimalizującej parametr BIC wybrano model - “(lm(log(question_time)~(position/item)+jezyk+kraj+plec+wyksztalcenie_M+wyksztalcenie_O+czytanieCzasopismNaukowych”, uwzględniający zagnieżdżenie zadania w pozycji oraz wszystkie wyżej wymienione cechy ucznia.</p>
 </div>
 <div id="analiza-istotnosci-wybranych-cech-ucznia" class="section level1">
-<h1>Analiza istotności wybranych cech ucznia</h1>
+<h1>3.Analiza istotności wybranych cech ucznia <a name="3.Analiza istotności wybranych cech ucznia"></a></h1>
 <pre class="r"><code>model_1&lt;-(lm(log(question_time)~kraj, data=dane))
 anova(model_1)</code></pre>
 <pre><code>## Analysis of Variance Table
@@ -213,12 +226,14 @@ anova(model_7)</code></pre>
 ## Residuals                  437841 279580    0.64                       
 ## ---
 ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
-<p>Analiza wielokierunkowa także wskazuje na istotność wszystkich zmiennych.</p>
+<p>Analiza wielokierunkowa także wskazuje na istotność wszystkich zmiennych. Na podstawie wartośći sumy kwadratów można zauważyć, że najsilniej na czas rozwiązywania działań wpływają zmienne kraj oraz język.</p>
 </div>
 <div id="model-uwzgledniajacy-cechy-zadania-i-cechy-ucznia" class="section level1">
-<h1>Model uwzględniający cechy zadania i cechy ucznia</h1>
-<p>Na tym etapie budujemy model uwzględniający zagnieżdżenie zadania w pozycji oraz wszystkie wyznaczone jako istotne cechy ucznia. Następnie sprawdzamy czy możemy zredukować liczby zmiennych w modelu, używając regresji krokowej opartej na kryterium AIC.</p>
+<h1>4.Model uwzględniający cechy zadania i cechy ucznia <a name="4.Model uwzględniający cechy zadania i cechy ucznia"> </a></h1>
+<p>Na tym etapie budujemy model uwzględniający zagnieżdżenie zadania w pozycji oraz wszystkie wyznaczone jako istotne cechy ucznia.</p>
 <pre class="r"><code>model&lt;-(lm(log(question_time)~(position/item)+jezyk+kraj+plec+wyksztalcenie_M+wyksztalcenie_O+czytanieCzasopismNaukowych, data=dane))</code></pre>
+<p>Następnie sprawdzamy czy możemy zredukować liczby zmiennych w modelu, używając regresji krokowej opartej na kryterium BIC.</p>
+<pre class="r"><code>summary(model&lt;-(lm(log(question_time)~(position/item)+jezyk+kraj+plec+wyksztalcenie_M+wyksztalcenie_O+czytanieCzasopismNaukowych, data=dane)))</code></pre>
 <pre><code>## 
 ## Call:
 ## lm(formula = log(question_time) ~ (position/item) + jezyk + kraj + 
@@ -615,19 +630,21 @@ anova(model_7)</code></pre>
 ##   (29692 observations deleted due to missingness)
 ## Multiple R-squared:  0.3686, Adjusted R-squared:  0.3683 
 ## F-statistic:  1366 on 187 and 437678 DF,  p-value: &lt; 2.2e-16</code></pre>
-<pre><code>## Start:  AIC=-379683.5
+<pre class="r"><code>smodel&lt;-step(model, k=log(467558))</code></pre>
+<pre><code>## Start:  AIC=-377605.1
 ## log(question_time) ~ (position/item) + jezyk + kraj + plec + 
 ##     wyksztalcenie_M + wyksztalcenie_O + czytanieCzasopismNaukowych
 ## 
 ##                               Df Sum of Sq    RSS     AIC
-## &lt;none&gt;                                     183815 -379683
-## - jezyk                        2        13 183828 -379657
-## - wyksztalcenie_M              2        39 183855 -379594
-## - wyksztalcenie_O              2        42 183857 -379589
-## - plec                         1        68 183884 -379523
-## - czytanieCzasopismNaukowych   4       121 183937 -379403
-## - kraj                        13      8498 192314 -359919
-## - position:item              160     89533 273348 -206252</code></pre>
+## &lt;none&gt;                                     183815 -377605
+## - jezyk                        2        13 183828 -377601
+## - wyksztalcenie_M              2        39 183855 -377537
+## - wyksztalcenie_O              2        42 183857 -377532
+## - plec                         1        68 183884 -377456
+## - czytanieCzasopismNaukowych   4       121 183937 -377369
+## - kraj                        13      8498 192314 -357985
+## - position:item              160     89533 273348 -205943</code></pre>
+<pre class="r"><code>summary(smodel)</code></pre>
 <pre><code>## 
 ## Call:
 ## lm(formula = log(question_time) ~ (position/item) + jezyk + kraj + 
@@ -1024,6 +1041,9 @@ anova(model_7)</code></pre>
 ##   (29692 observations deleted due to missingness)
 ## Multiple R-squared:  0.3686, Adjusted R-squared:  0.3683 
 ## F-statistic:  1366 on 187 and 437678 DF,  p-value: &lt; 2.2e-16</code></pre>
+</div>
+<div id="wniosek" class="section level1">
+<h1>5.Wniosek <a name="5.Wniosek"></a></h1>
 <p>Metoda ta potwierdza że wszystkie uwzględnione zmienne są istotne, a usunięcie którejś z nich skutkuje spadkiem jakości modelu, w związku z czym zostaje on wybrany jako model, którego diagnostykę wykonamy na następnym etapie.</p>
 </div>
 
