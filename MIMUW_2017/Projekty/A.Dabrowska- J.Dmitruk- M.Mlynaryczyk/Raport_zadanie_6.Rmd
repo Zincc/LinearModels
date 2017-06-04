@@ -2,7 +2,7 @@
 title: "Projekt modele liniowe i mieszane"
 subtitle: "Zadanie VI"
 author: "Aleksandra Dąbrowska, Jan Dmitruk, Magda Młynarczyk"
-date: "12 maja 2017"
+date: "30 maja 2017"
 output:
   html_document:
     toc: true
@@ -16,13 +16,17 @@ output:
 knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning = FALSE)
 ```
 
-```{r, include = FALSE, message=FALSE}
+``````{r, message=FALSE}
 library(dplyr)
 library(ggplot2)
 library(MASS)
 library(knitr)
+library(agricolae)
+library(broom)
+```
 
-setwd("C:\\Users\\Magda\\Documents\\GitHub\\Projekt-Pisa2015\\Faza 3 i 4")
+```{r, include = FALSE, message=FALSE}
+setwd("C:/Users/O/Desktop/Moje dokumenty/math/MODELE LINIOWE I MIESZANE/Projekt/Faza3,4")
 load("dane_nowe.rda")
 ```
 
@@ -34,81 +38,35 @@ W fazie 6 przeprowadzimy dodatkowe transformacje zmiennych objaśnianych i obja�
 
 Rozpatrzyliśmy następujące transformacje zmiennej objaśnianej:
 
-* Transformacja Boxa-Coxa [3.2](#3.2)
+* Transformacja Boxa-Coxa [4.2](#4.2)
 
-* Transformacja logarytmiczna oraz transformacja logarytmiczna z przesunięciem [3.3](#3.3)
+* Transformacja logarytmiczna oraz transformacja logarytmiczna z przesunięciem [4.3](#4.3)
 
-Wybraną przez nas transformacją jest logarytmiczne przekształcenie czasu z parametrem przesunięcia równym $\beta = 50$. Swoją decyzję oparliśmy na podstawie współczynnika R squared [3.4](#3.4).
+Wybraną przez nas transformacją jest logarytmiczne przekształcenie czasu z parametrem przesunięcia równym $\beta = 45$. Swoją decyzję oparliśmy na podstawie kryterium informacyjnego Akaike oraz rozkładu reszt. [4.4](#4.4).
 
 Opisaliśmy także wykonane przez nas w poprzednich fazach przekształcenia zmiennych objaśniających:
 
-* `zadanie` - informacja na temat numeru zadania [4.1](#4.1)
+* `zadanie` - informacja na temat numeru zadania [3.1](#3.1)
 
-* `stat_m`, `stat_o` - informacja na temat statusu socjoekonomicznego matki i ojca, odpowiednio [4.2](#4.2)
+* `stat_m`, `stat_o` - informacja na temat statusu socjoekonomicznego matki i ojca, odpowiednio [3.2](#3.2)
 
-* `gr_zawod_m`, `gr_zawod_o` - informacja na temat grupy zawodowej w obrębie której pracuje matka i ojciec [4.3](#4.3)
+* `gr_zawod_m`, `gr_zawod_o` - informacja na temat grupy zawodowej w obrębie której pracuje matka i ojciec [3.3](#3.3)
+
+* `wyk_m`, `wyk_o` - informacja na temat wykształcenia rodziców. [3.4](#3.4)
 
 Dzięki tym zmianom, zarówno dane jak i model stały się bardziej przejrzyste, a dzięki transformacjom danych model liniowy jest lepiej dopasowany.
 
-#Transformacje czasu
-
-##Agregowanie czasu zadania ze względu na podpunkt
-W pierwszej fazie naszego projektu zdedcydowaliśmy modelować czas rozwiązywania całego zadania przez ucznia, pomimo posiadania informacji na temat czasu rozwiązywania poszczególnych podpunktów. Aby było to możliwe, ze zmiennej `kod_zadania` wyciągnęliśmy numer podpunktu danego zadania [4.1](#4.1), a następnie posumowaliśmy czasy ze wszystkich podpunktów danego zadania (pełny kod: https://github.com/pbiecek/LinearModels/blob/master/MIMUW_2017/Projekty/A.Dabrowska-%20J.Dmitruk-%20M.Mlynaryczyk/Raport_zadanie_1.Rmd).
-
-```{r,eval=FALSE}
-dane6 <- dane6 %>% group_by(CNTSTUID,zadanie) %>% summarize(sum(czas))
-```
-
-Ze względu na nieliniowość naszego modelu rozpatrywaliśmy już w poprzednich fazach różne transformacje czasu. W fazie 4 porównywaliśmy transformacje $\log(t)$ z transformacjami typu $t^{\alpha}$. Zdecydowaliśmy, że modelowanie logarytmu czasu jest lepsze. Przeprowadźmy jeszcze raz to rozumowanie, uwzględniając interakcje rozważane w poprzedniej fazie.
-
-##Transformacje Boxa-Coxa <a name = "3.2"></a>
-
-```{r}
-Model <- lm(czas_zadania~zadanie*pozycja_zadania+id_kwestionariusza+mies_ur+id_kraju*plec+wyk_m*wyk_o+gr_zawod_m+gr_zawod_o+stat_m+stat_o, data = dane_nowe)
-
-wsp <- boxcox(Model)
-wsp <- wsp$x[which.max(wsp$y)]
-
-BoxModel <- lm(I(((czas_zadania)^wsp-1)/wsp)~zadanie*pozycja_zadania+id_kwestionariusza+mies_ur+id_kraju*plec+wyk_m*wyk_o+gr_zawod_m+gr_zawod_o+stat_m+stat_o, data = dane_nowe)
-
-```
-
-##Transformacje logrytmiczne <a name = "3.3"></a>
-Na początku wykonamy zwykła transformację logarytmiczną czasu. Następnie rozważymy także wybór parametru przesunięcia w transformacji logarytmicznej przy pomocy funkcji `logtrans`{MASS}
-
-```{r}
-LogModel <- lm(log(czas_zadania)~zadanie*pozycja_zadania+id_kwestionariusza+mies_ur+id_kraju*plec+wyk_m*wyk_o+gr_zawod_m+gr_zawod_o+stat_m+stat_o, data = dane_nowe)
-
-beta <- logtrans(Model, alpha = seq(0.5, 80, 0.5))
-beta <- beta$x[which.max(beta$y)]
-
-LogTransModel <- lm(log(czas_zadania + beta)~zadanie*pozycja_zadania+id_kwestionariusza+mies_ur+id_kraju*plec+wyk_m*wyk_o+gr_zawod_m+gr_zawod_o+stat_m+stat_o, data = dane_nowe)
-```
-
-##Wybór optymalnej transformacji <a name = "3.4"></a>
-
-Porównamy powyższe modele między sobą za pomocą parametru R squared. 
-```{r}
-rsq <- c("Model", "LogModel", "BoxModel", "LogTransModel")
-rsq <- cbind(rsq, c(summary(Model)$r.squared, summary(LogModel)$r.squared,summary(BoxModel)$r.squared, summary(LogTransModel)$r.squared))
-
-colnames(rsq) <- c("nazwa modelu", "R squared")
-kable(rsq)
-```
-
-Okazuje się, że najwyższą wartość parametru R squared dostajemy dla modelu z przesunięciem w transformacji logarytmicznej. 
-
-#Transformacje zmiennych objaśnianych
+#Transformacje zmiennych objaśniających
 
 Opiszemy najpierw transformacje, które przeprowadziliśmy w poprzednich fazach.
 
-##Wydobycie informacji o numerze zadania <a name = "4.1"></a>
+##Wydobycie informacji o numerze zadania <a name = "3.1"></a>
 W pierwotnych danych (`dane_matematyka`) dysponowaliśmy jedynie zmienną `kod_zadania`, zawierającą w sobie informacje zarówno o numerze zadania jak i o podpunkcie. Modelując czas całego zadania potrzebna nam była informacja o numerze zadania.
 ```{r,eval=FALSE}
 dane_matematyka$zadanie <- substr(dane_matematyka$item_short,2,4)
 ```
 
-##Faktoryzacja statusu socjoekonomicznego <a name = "4.2"></a>
+##Faktoryzacja statusu socjoekonomicznego <a name = "3.2"></a>
 Jedną z rozważanych przez nas zmiennych, był status socjoekonomiczny matki i ojca danego ucznia. Zmienna ta przyjmowała wartości z przedziału [0,100]. Postanowiliśmy pogrupować je na pięć kategorii za pomocą funkcji `cut2`{Hmisc}
 
 ```{r, eval = FALSE, error = TRUE}
@@ -117,7 +75,7 @@ dane_kwestionariusze$stat_m <- cut2(dane_kwestionariusze$stat_m,c(20,40,60,80))
 dane_kwestionariusze$stat_o <- cut2(dane_kwestionariusze$stat_o,c(20,40,60,80))
 ```
 
-##Przydzielenie grup zawodowych <a name = "4.3"></a>
+##Przydzielenie grup zawodowych <a name = "3.3"></a>
 
 Z pierwotnych danych posiadaliśmy wiedzę na temat zawodów wykonywanych przez rodziców. Ze względu na dużą liczbę (428 poziomów) możliwych wartości tych zmiennych, postanonwiliśmy przydzielić je do odpowienich grup zawodowych zgodnie z klasyfikacją ISCO-08. Na skutek tej transformacji otrzymaliśmy zmienne o 10 poziomach.
 
@@ -159,7 +117,171 @@ dane <- unique(dane)
 head(dane[c(1,4:7,10:11)])
 ```
 
+##Wykształcenie rodziców <a name = "3.4"></a>
+Wśród zmiennych znajdujących się w danych z kwestionariusza znajdują się także te mówiące o wykształceniu rodziców danego dziecka.
+Jest to zmienna posiadajca siedem poziomów:
+```{r}
+table(dane_nowe$wyk_m)
+```
+
+Chcemy zmiejszyć listę poziomów powyższych zmiennych wykonując testy post-hoc. Najpierw budujemy model oparty na wybranych wcześniej zmiennych.
+```{r}
+Model <- lm(czas_zadania~zadanie*pozycja_zadania+id_kwestionariusza+mies_ur+id_kraju*plec+wyk_m*wyk_o+gr_zawod_m+gr_zawod_o+stat_m+stat_o, data = dane_nowe)
+```
+
+Korzystając z funkcji `LSD.test{agricolae}` wykonujemy testowanie post-hoc.
+```{r}
+post_hoc_o <- LSD.test(Model, "wyk_o")
+kable(post_hoc_o$groups)
 
 
+post_hoc_m <- LSD.test(Model, "wyk_m")
+kable(post_hoc_m$groups)
+```
+
+Możemy zmienną `wyk_o` podzielić na trzy grupy:
+
+* pierwsza zawierająca poziomy `3A,4`,`5A,6`
+
+* druga zawierająca poziomy `5B`, `3B,C`, `2`
+
+* trzecia zawierająca poziomy `1` i `None`,
+
+a zmienną `wyk_m` na dwie grupy:
+
+* poziomy `None`, `5A,6`, `3A,4`
+
+* poziomy `1`, `5B`, `3B,C`, `2`.
+
+```{r}
+dane_nowe$wyk_m_ch <- as.character(dane_nowe$wyk_m)
+dane_nowe$wyk_o_ch <- as.character(dane_nowe$wyk_o)
+dane_nowe <-dane_nowe %>% mutate(wyk_o_lsd = case_when(.$wyk_o %in% c(" 3A,   4"," 5A,  6") ~ "a",
+                                            .$wyk_o %in% c(" 5B"," 3B,  C"," 2") ~ "b",
+                                            .$wyk_o %in% c(" 1","None") ~"c"
+                                            ),
+                                wyk_m_lsd = case_when(.$wyk_m %in% c("None"," 5A,  6"," 3A,  4") ~ "a",
+                                            .$wyk_m %in% c(" 1"," 5B"," 3B,  C"," 2") ~ "b"))
+
+```
+
+```{r}
+model_gr <- lm(czas_zadania~zadanie*pozycja_zadania+id_kwestionariusza+mies_ur+id_kraju*plec+wyk_m_lsd*wyk_o_lsd+gr_zawod_m+gr_zawod_o+stat_m+stat_o, data = dane_nowe)
+
+```
+
+```{r}
+AIC(Model)
+AIC(model_gr)
+
+```
+Jak widzimy model z pogrupowanymi zmiennymi ma mniejsze AIC i to ten model będziemy rozważać w kolejnych analizach.
 
 
+#Transformacje czasu
+
+##Agregowanie czasu zadania ze względu na podpunkt
+W pierwszej fazie naszego projektu zdedcydowaliśmy modelować czas rozwiązywania całego zadania przez ucznia, pomimo posiadania informacji na temat czasu rozwiązywania poszczególnych podpunktów. Aby było to możliwe, ze zmiennej `kod_zadania` wyciągnęliśmy numer podpunktu danego zadania [3.1](#3.1), a następnie posumowaliśmy czasy ze wszystkich podpunktów danego zadania (pełny kod: https://github.com/pbiecek/LinearModels/blob/master/MIMUW_2017/Projekty/A.Dabrowska-%20J.Dmitruk-%20M.Mlynaryczyk/Raport_zadanie_1.Rmd).
+
+```{r,eval=FALSE}
+dane6 <- dane6 %>% group_by(CNTSTUID,zadanie) %>% summarize(sum(czas))
+```
+
+Ze względu na nieliniowość naszego modelu rozpatrywaliśmy już w poprzednich fazach różne transformacje czasu. W fazie 4 porównywaliśmy transformacje $\log(t)$ z transformacjami typu $t^{\alpha}$. Zdecydowaliśmy, że modelowanie logarytmu czasu jest lepsze. Przeprowadźmy jeszcze raz to rozumowanie, uwzględniając interakcje rozważane w poprzedniej fazie.
+
+##Transformacje
+
+###Transformacje Boxa-Coxa <a name = "4.2"></a>
+
+```{r}
+Model <- lm(czas_zadania~zadanie*pozycja_zadania+id_kwestionariusza+mies_ur+id_kraju*plec+wyk_m_lsd*wyk_o_lsd+gr_zawod_m+gr_zawod_o+stat_m+stat_o, data = dane_nowe)
+
+wsp <- boxcox(Model)
+wsp <- wsp$x[which.max(wsp$y)]
+
+BoxModel <- lm(I(((czas_zadania)^wsp-1)/wsp)~zadanie*pozycja_zadania+id_kwestionariusza+mies_ur+id_kraju*plec+wyk_m_lsd*wyk_o_lsd+gr_zawod_m+gr_zawod_o+stat_m+stat_o, data = dane_nowe)
+
+BoxModel2 <- lm(I((czas_zadania)^wsp)~zadanie*pozycja_zadania+id_kwestionariusza+mies_ur+id_kraju*plec+wyk_m_lsd*wyk_o_lsd+gr_zawod_m+gr_zawod_o+stat_m+stat_o, data = dane_nowe)
+
+
+AIC(BoxModel)
+AIC(BoxModel2)
+
+```
+
+###Transformacje logrytmiczne <a name = "4.3"></a>
+Na początku wykonamy zwykła transformację logarytmiczną czasu. Następnie rozważymy także wybór parametru przesunięcia w transformacji logarytmicznej przy pomocy funkcji `logtrans`{MASS}
+
+```{r}
+LogModel <- lm(log(czas_zadania)~zadanie*pozycja_zadania+id_kwestionariusza+mies_ur+id_kraju*plec+wyk_m_lsd*wyk_o_lsd+gr_zawod_m+gr_zawod_o+stat_m+stat_o, data = dane_nowe)
+
+beta <- logtrans(Model, alpha = seq(0.5, 80, 0.5))
+beta <- beta$x[which.max(beta$y)]
+
+LogTransModel <- lm(log(czas_zadania + beta)~zadanie*pozycja_zadania+id_kwestionariusza+mies_ur+id_kraju*plec+wyk_m_lsd*wyk_o_lsd+gr_zawod_m+gr_zawod_o+stat_m+stat_o, data = dane_nowe)
+```
+
+###Wybór optymalnej transformacji <a name = "4.4"></a>
+
+Porównamy powyższe modele między sobą za pomocą parametru R squared. 
+```{r}
+rsq <- c("Model", "LogModel", "BoxModel", "LogTransModel")
+rsq <- cbind(rsq, c(summary(Model)$r.squared, summary(LogModel)$r.squared,summary(BoxModel2)$r.squared, summary(LogTransModel)$r.squared))
+
+colnames(rsq) <- c("nazwa modelu", "R squared")
+
+kable(rsq, caption="Wartości R-squared dla rozważanych modeli")
+
+AIC <- c("Model", "LogModel", "BoxModel", "LogTransModel")
+AIC <- cbind(AIC, c(AIC(Model), AIC(LogModel),AIC(BoxModel2), AIC(LogTransModel)))
+
+colnames(AIC) <- c("nazwa modelu", "AIC")
+
+kable(AIC, caption = "Wartości AIC dla rozważanych modeli")
+```
+
+Okazuje się, że najniższą wartość  kryterium Akaike otrzymujemy przy transformacji logarytmicznej z przesunięciem.
+
+##Wizualizacja reszt
+
+Dla przedstawionych powyżej przekształceń zmiennej objaśnianej, sprawdzimy, dzięki któremu, rozkład reszt jest najbliższy normalnemu. 
+
+Dla modelu bez transformacji.
+```{r}
+dane_model <-augment(Model)
+hist(dane_model$.resid, col="blue", xlab="residuals", main="Rozkład reszt dla modelu bez transformacji", breaks=100)
+
+skewness(dane_model$.resid)
+kurtosis(dane_model$.resid)
+```
+
+Dla modelu z transformacją z rodziny Boxa-Coxa.
+```{r}
+dane_model <-augment(BoxModel)
+hist(dane_model$.resid, col="blue", xlab="residuals", main="Rozkład reszt dla modelu z transformacją Boxa-Coxa", breaks=100)
+
+skewness(dane_model$.resid)
+kurtosis(dane_model$.resid)
+
+```
+
+Dla modelu z logarytmem.
+```{r}
+dane_model<-augment(LogModel)
+hist(dane_model$.resid, col="blue", xlab="residuals", main="Rozkład reszt dla modelu z transformacja logarytmiczna", breaks=100)
+
+skewness(dane_model$.resid)
+kurtosis(dane_model$.resid)
+
+```
+Dla modelu z przesunięciem logarytmicznym równym $\beta = 45$.
+```{r}
+dane_model <-augment(LogTransModel)
+hist(dane_model$.resid, col="blue", xlab="residuals", main="Rozkład reszt dla modelu z transformacja logarytmiczna z przesunieciem", breaks=100)
+
+skewness(dane_model$.resid)
+kurtosis(dane_model$.resid)
+
+```
+
+Widzimy, że najlepiej rozkład reszt poprawia nam transformacja logarytmiczna z przesunięciem. Ze wszystkich przedstawionych jest najbardziej zbliżony do normalnego (kurtoza i skośność najbliżej 0).
