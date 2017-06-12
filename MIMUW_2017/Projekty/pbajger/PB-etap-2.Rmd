@@ -1,0 +1,174 @@
+---
+title: "Piotr Bajger - Etap 2."
+author: "Piotr Bajger"
+date: "4 czerwca 2017"
+output: 
+  html_document:
+    toc: true
+---
+```{r setup, include=TRUE, echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(cache.lazy =  T)
+options(warn = -1)
+```
+
+```{r, echo = FALSE}
+library(MASS)
+library(stats)
+library(ggplot2)
+library(lattice)
+library(lmtest)
+
+## Funkcja, której używam do wyznaczania średnich z przedziałami ufności w (zagnieżdżonych) grupach.
+## Gives count, mean, standard deviation, standard error of the mean, and confidence 
+## interval (default 95%).
+##   data: a data frame.
+##   measurevar: the name of a column that contains the variable to be summariezed
+##   groupvars: a vector containing names of columns that contain grouping variables
+##   na.rm: a boolean that indicates whether to ignore NA's
+##   conf.interval: the percent range of the confidence interval (default is 95%)
+summarySE <- function(data=NULL, measurevar, groupvars=NULL, na.rm=FALSE, conf.interval=.95) {
+  library(doBy)
+
+    length2 <- function (x, na.rm=FALSE) {
+      if (na.rm) sum(!is.na(x))
+      else       length(x)
+    }
+      
+  # Collapse the data
+  formula <- as.formula(paste(measurevar, paste(groupvars, collapse=" + "), sep=" ~ "))
+  datac <- summaryBy(formula, data=data, FUN=c(length2,mean,sd), na.rm=na.rm)
+  
+  # Rename columns
+  names(datac)[ names(datac) == paste(measurevar, ".mean",    sep="") ] <- measurevar
+  names(datac)[ names(datac) == paste(measurevar, ".sd",      sep="") ] <- "sd"
+  names(datac)[ names(datac) == paste(measurevar, ".length2", sep="") ] <- "N"
+  
+  datac$se <- datac$sd / sqrt(datac$N)  # Calculate standard error of the mean
+  
+  # Wyznacza przedział ufności
+  # Calculate t-statistic for confidence interval:  
+  # e.g., if conf.interval is .95, use .975 (above/below), and use df=N-1
+  ciMult <- qt(conf.interval/2 + .5, datac$N-1)
+  datac$ci <- datac$se * ciMult
+  
+  return(datac)
+}
+
+```
+
+
+# 2. Diagnostyka i wizualizacja modelu
+W Etapie 1. skonstruowaliśmy dwa modele liniowe na podstawie przygotowanego pliku z danymi **qTimeFinal**:
+
+* model1: Pozycji w teście oraz ID zadania.
+
+* model2: ID zadania zagnieżdżonego w pozycji w teście.
+
+W tym etapie dokonam wyboru jednego z tych modeli, zwizualizuję dane oraz wyniki modelu.
+
+## 2.1 Wizualizacja danych
+Poniżej przeprowadzimy wizualizację danych w celu lepszego zrozumienia ich struktury. 
+
+Sprawdźmy, czy średni czas rozwiązania zadań różni się od ich pozycji w kwestionariuszu.
+
+```{r, echo=FALSE}
+options(warn=-1)
+```
+ 
+```{r}
+ggplot(qTimeFinal, aes(position, logT)) + geom_boxplot()
+gplots::plotmeans(qTimeFinal$logT ~ factor(qTimeFinal$position), connect=TRUE, xlab="position", ylab="Mean logT", n.label=FALSE)
+plot(TukeyHSD(aov(logT ~ position, data=qTimeFinal)), las=1)
+```
+```{r, echo=FALSE}
+gc(verbose = FALSE)
+```
+
+Czas rozwiązania zadania znajdującego się na pierwszej pozycji jest największy. Wynika to zapewne z faktu, że uczniowie potrzebują czasu, by zapoznać się ze sposobem, w jaki wypełnia się w teście zadania. Najmniejszy średni czas rozwiązywania zadania na ostatniej pozycji może wynikać z faktu, że uczniowie znajdowali się pod presją czasu. Różnice w czasach nie wydają się jednak na tyle duże, by móc wyciągnąc z nich interesujące wnioski (chociaż test HSD Tukey'a sugeruje istotność różnic pomiędzy każdą z grup).
+
+Podobną wizualizację przeprowadzamy dla poszczególnych ID zadań. Widzimy w szczególności, że generalnie istnieją różnice pomiędzy średnimi w poszczególnych zadanich.
+
+```{r, fig.width = 12}
+ggplot(qTimeFinal, aes(x=reorder(question, logT, FUN=mean), y=logT)) + geom_boxplot() + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(x = "question")
+
+plot(TukeyHSD(aov(logT ~ question, data=qTimeFinal)), las=1,  yaxt="n")
+```
+
+```{r, echo = FALSE}
+gc(verbose = FALSE)
+```
+
+Kolejny wykres przedstawia średni czas rozwiązania danego zadania w zależności od tego, na jakiej pozycji ono występuje.
+
+```{r, figure.height=10}
+qTimeFinalSum <- summarySE(qTimeFinal, measurevar="logT", groupvars=c("question","position")) #Liczy średnią oraz odchylenie standardowe dla zagnieżdżonych grup
+ggplot(qTimeFinalSum, aes(position, logT, group=1)) + facet_wrap(~question) + geom_point() + geom_line()
+```
+
+## 2.2 Wybór modelu
+W celu wyboru jednego z dwóch zaproponowanych modeli zacznijmy od wyznaczenia dla nich kryterium BIC:
+```{r, echo = FALSE}
+model1 <- lm(logT ~ position + question , data = qTimeFinal)
+model2 <- lm(logT ~ position + position/question, data = qTimeFinal)
+paste("Kryterium BIC dla Modelu1 'logT ~ position + question' wynosi BIC = ", AIC(model1, k=log(nrow(qTimeFinal))))
+paste("Kryterium BIC dla Modelu1 'logT ~ position + position/question' wynosi BIC = ", AIC(model2, k=log(nrow(qTimeFinal))))
+```
+
+Do dalszej analizy wybrałem _model2_, tzn. "logT ~ position + question". Kierowałem się następującymi kryteriami:
+
+* Zagnieżdżenie zadania w pozycji poprawia kryterium BIC.
+
+* Ostatni wykres w Rozdziale 2.1 pokazuje, że istnieją różnice w średnich czasach rozwiązań zadania w zależności od tego, na której pozycji w teście się ono znajduje (por. zadania M442, M961 lub M957).
+
+```{r, echo = FALSE}
+rm(model1)
+gc(verbose = FALSE)
+```
+## 2.3 Wizualizacja modelu
+Poniższe wykresy przedstawiają wartości parametrów regresji dla poszczególnych zmiennych w modelu
+```{r}
+gg_color_hax = c("#7CAE00", "#00BFC4", "#C77CFF")
+
+coeff = model2$coefficients
+
+coeff.names <- names(model2$coefficients) #Wyciaga nazwy bet
+pos.df <- data.frame(beta = coeff[2:4], position = 2:4)
+
+ggplot(pos.df, aes(position, beta)) + geom_bar(position = 'dodge', stat = 'identity', fill=gg_color_hax, color=gg_color_hax)
+```
+
+```{r, fig.width = 12}
+coeff.p <- unlist(lapply(X = coeff.names[5:180], FUN = function(x) substr(x, 9, 9)))
+coeff.q <- unlist(lapply(X = coeff.names[5:180], FUN = function(x) substr(x, 19, 22)))
+coeff.df <- data.frame(beta = unname(coeff[5:180]), position = coeff.p, question = coeff.q)
+
+ggplot(coeff.df, aes(fill=position, x=reorder(question, -beta), y=beta)) + facet_wrap(~position) + geom_bar(position = 'dodge', stat = 'identity')+ theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(x = 'question')
+```
+
+```{r, echo=FALSE}
+gc(verbose = FALSE)
+```
+
+## 2.4 Diagnostyka modelu
+Podstawowym założeniem, które jest niezbędne konstrukcji modelu jest normalny rozkład reszt. Poniższe wykresy mają na celu weryfikację, czy to założenie jest spełnione.
+
+Wykres Q-Q pokazuje, że rozkład reszt w znaczącym stopniu odbiega od normalnego w prawym i lewym ogonie, co świadczy o kurtozie większej niż w rozkładzie normalnym. Niemniej dopasowanie w środkowej części jest dobre.
+
+```{r}
+qqnorm(model2$res)
+qqline(model2$res)
+hist(model2$res, main="Histogram of residue values", xlab="Residue")
+```
+
+
+Model nie przechodzi testu heteroskedastyczności reszt Breuscha-Pagana:
+
+```{r}
+lmtest::bptest(model2)
+```
+
+```{r cleanup, echo=FALSE}
+options(warn = 0)
+gc()
+```
