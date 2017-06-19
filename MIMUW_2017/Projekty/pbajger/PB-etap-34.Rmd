@@ -1,0 +1,261 @@
+---
+title: "Piotr Bajger - Etapy 3 i 4."
+author: "Piotr Bajger"
+date: "11 czerwca 2017"
+output:
+  html_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(MASS)
+library(ggplot2)
+library(foreign)
+library(e1071)
+```
+
+## 3.1. Wczytanie i przygotowanie danych
+
+Celem Etapów 3 i 4 jest przygotowanie danych oraz rozszerzenia modeli z Etapów 1 i 2 o cechy ucznia, tzn. skonstruowanie modelu predykcji czasu potrzebnego na rozwiązanie zadania z części matematycznej testu PISA 2015 na podstawie cech zadania (ID, pozycja w kwestionariuszu) oraz dodatkowo wybranych cech ucznia z pliku **CY6_MS_CMB_STU_QQQ.sav** (płeć, kraj pochodzenia, wykształcenia rodziców, licbę książek w gospodarstwie domowym na tematy związane ze sztuką oraz liczbę instrumentów muzycznych).
+
+Ze względu na rozmiar danych i długi czas potrzebny na obliczenia, wybieramy w sposób losowy podzbiór (40%) ID uczniów _CNTSTUID_. Biorąc pod uwagę, że powyższy zabieg zmniejsza liczbę naszych obserwacji do ok. 800 tysięcy (z ok. 2 milionów), mamy przekonanie, że nie zaburzy to w znaczący sposób wyników modelu.
+
+W rezultacie otrzymamy zbiór o następującej strukturze:
+
+```{r, echo=FALSE, cache=TRUE}
+if(!exists("stud")){
+  stud <- read.spss("C:/Projects/R/CY6_MS_CMB_STU_QQQ.sav", use.value.labels = TRUE, to.data.frame = TRUE)
+}
+
+#Wybranie interesujących nas zmiennych
+studentChars = c("CNTSTUID", "CNT", "ST004D01T", "ST005Q01TA", "ST007Q01TA", "ST011Q16NA", "ST012Q09NA")
+stud <- stud[, studentChars]
+stud <- na.omit(stud)
+
+#Skonstruowanie próbki z ogółu obserwacji
+if(!exists("studSample")){
+  studSample <- stud[sample(nrow(stud), floor(0.4*nrow(stud))), ]
+  qTime34Sample <- qTimeFinal[which(qTimeFinal$CNTSTUID %in% studSample$CNTSTUID), ]
+  qTime34 <- merge(qTime34Sample, studSample)
+  colnames(qTime34)[6] <- "CNT"
+  colnames(qTime34)[7] <- "gender"
+  colnames(qTime34)[8] <- "mother_edu"
+  colnames(qTime34)[9] <- "father_edu"
+  colnames(qTime34)[10] <- "art_books"
+  colnames(qTime34)[11] <- "musical_instr"
+}
+```
+
+```{r, echo=FALSE}
+#Garbage collector
+rm(qTime34Sample)
+#rm(studSample)
+gc(verbose=FALSE)
+options(warn=0)
+```
+
+```{r, echo=TRUE}
+head(qTime34)
+```
+
+## 3.2 Wizualizacja danych
+Poniżej przedstawiam boxploty oraz wykresy średnich dla wszystkich poziomów zmiennych, które rozważam.
+
+### 3.2.1 Kraj i płeć
+```{r, echo=TRUE, fig.width = 9}
+qTimeStudSum <- summarySE(qTime34, measurevar="logT", groupvars=c("CNT"))
+
+ggplot(qTimeStudSum, aes(x=reorder(CNT, logT), y=logT)) + geom_point(position = position_dodge(.1), stat="identity") + geom_errorbar(aes(ymin=logT-se, ymax=logT+se), position = position_dodge(.1)) + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(x = "Country", y = "Mean log(T)") + ggtitle(label = "Country")
+
+ggplot(qTime34, aes(x=reorder(CNT, logT, FUN=mean), y=logT)) + geom_boxplot() + theme(axis.text.x = element_text(angle = 90, hjust = 1))+ labs(x = "Country")
+```
+
+```{r, echo=TRUE}
+qTimeStudSum <- summarySE(qTime34, measurevar="logT", groupvars=c("gender"))
+
+ggplot(qTimeStudSum, aes(x=reorder(gender, logT), y=logT)) + geom_point(position=position_dodge(.1), stat="identity") + geom_errorbar(aes(ymin=logT-se, ymax=logT+se), position = position_dodge(.1)) + labs(x="gender", y = "Mean log(T)") + ggtitle(label = "Gender")
+
+ggplot(qTime34, aes(gender, logT)) + geom_boxplot() + labs(x = "Gender")
+```
+
+### 3.2.2 Książki i instrumenty muzyczne
+```{r, echo=TRUE}
+qTimeStudSum <- summarySE(qTime34, measurevar="logT", groupvars=c("musical_instr"))
+
+ggplot(qTimeStudSum, aes(x=reorder(musical_instr, logT), y=logT)) + geom_point(position=position_dodge(.1), stat="identity") + geom_errorbar(aes(ymin=logT-se, ymax=logT+se), position = position_dodge(.1)) + labs(x="# musical instruments", y = "Mean log(T)") + ggtitle(label = "Musical instruments")
+
+ggplot(qTime34, aes(x=reorder(musical_instr, logT, FUN=mean), y=logT)) + geom_boxplot() + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(x = "# musical instruments")
+```
+
+
+```{r, echo=TRUE}
+qTimeStudSum <- summarySE(qTime34, measurevar="logT", groupvars=c("art_books"))
+
+ggplot(qTimeStudSum, aes(x=reorder(art_books, logT), y=logT)) + geom_point(position=position_dodge(.1), stat="identity") + geom_errorbar(aes(ymin=logT-se, ymax=logT+se), position = position_dodge(.1)) + labs(x="Art books in house?", y = "Mean log(T)") + ggtitle(label = "Art and design books")
+
+ggplot(qTime34, aes(art_books, logT)) + geom_boxplot() + labs(x = "Art books in house?")
+```
+
+### 3.2.3 Wykształcenie rodziców
+```{r, echo=TRUE}
+qTimeStudSum <- summarySE(qTime34, measurevar="logT", groupvars=c("mother_edu"))
+
+ggplot(qTimeStudSum, aes(x=reorder(mother_edu, logT), y=logT)) + geom_point(position=position_dodge(.1), stat="identity") + geom_errorbar(aes(ymin=logT-se, ymax=logT+se), position = position_dodge(.1)) + labs(x="Mother's education", y = "Mean log(T)") + ggtitle(label = "Mother's education")
+
+ggplot(qTime34, aes(x=reorder(mother_edu, logT, FUN=mean), logT)) + geom_boxplot() + labs(x = "Mother's education")
+```
+
+```{r, echo=TRUE, fig.width = 9}
+#Ustawienie leveli, by były w kolejności od najniższego do najwyższego poziomu edukacji
+levels(qTime34$mother_edu) <- levels(qTime34$mother_edu)[c(5, 4, 3, 1, 2)]
+levels(qTime34$father_edu) <- levels(qTime34$father_edu)[c(5, 4, 3, 1, 2)]
+
+qTimeStudSum <- summarySE(qTime34, measurevar="logT", groupvars=c("father_edu"))
+
+ggplot(qTimeStudSum, aes(x=reorder(father_edu, logT), y=logT)) + geom_point(position=position_dodge(.1), stat="identity") + geom_errorbar(aes(ymin=logT-se, ymax=logT+se), position = position_dodge(.1)) + labs(x="Father's education", y = "Mean log(T)") + ggtitle(label = "Father's education")
+
+ggplot(qTime34, aes(x=reorder(father_edu, logT, FUN=mean), logT)) + geom_boxplot() + labs(x = "Father's education")
+```
+
+Wizualizacja interakcji między wykształceniami rodziców:
+```{r, echo = TRUE, fig.width = 9}
+interaction.plot(qTime34$mother_edu, qTime34$father_edu, qTime34$logT, xlab = "Mother education", ylab = "Mean log(T)", trace.label = "Father's education")
+```
+
+##3.2 Konstrukcja i wybór modelu
+Naszym celem będzie rozszerzenie modelu liniowego skonstruowanego w Etapie 1. i 2. W tym celu rozważymy korzyści, które płyną z dodania nowych zmiennych do naszego modelu. Rozważyliśmy wszystkie 63 możliwe (niepuste) kombinacje sześciu zmiennych i wybierzemy model minimalizujący kryterium BIC. Okazuje się, że model zawierający wszystkie sześć zmiennych minimalizuje kryterium BIC, więc to on będzie przedmiotem naszych dalszych badań. 
+
+Wyniki naszej analizy modeli przedstawiamy na wykresie poniżej. Na czerwono zaznaczono modele, które zawierają zmienną _CNT_, czyli kraj pochodzenia ucznia. Posiada najwięcej poziomów, ze wszystkich zmiennych, które rozważamy i jednocześnie najbardziej poprawia kryterium BIC.
+  
+```{r, echo = FALSE}
+#Szukanie modelu minimalizującego kryterium BIC (długotrwałe obliczenia)
+if(!exists("params")){
+  vars <- colnames(qTime34)[6:11]
+  wsp = (bincombinations(length(nms))==1)[-1,]
+  params = matrix(0, nrow(wsp), 4)
+  
+  for (i in 50:52) {
+     form = as.formula(paste("logT ~ ", paste(c(vars[wsp[i,]], "position + position/question"), collapse="+")))
+     model = lm(form, data = qTime34)
+     params[i,1] = AIC(model, k=log(nrow(qTime34)))
+     params[i,2] = model$rank
+     params[i,3] = summary(model)$adj.r.squared
+     params[i,4] = AIC(model)
+  }
+  
+  mini = which(params[,4] == min(params[,4]))
+  paste(c("Dodatkowe zmienne użyte w modelu minimalizującym BIC:", paste(c(vars[wsp[mini,]]), collapse=", ")), collapse = " ")
+}
+```
+
+```{r}
+params <- as.data.frame(params)
+colnames(params) <- c("BIC", "rank", "adjR2", "AIC")
+ggplot(params, aes(rank, BIC)) + geom_point() + geom_point(data=params[which(wsp[,1] == TRUE),], color = 'red')
+```
+
+Istotność statystyczną wszystkich użytych zmiennych potwierdza jednokierunkowa analiza wariancji:
+```{r, cache = TRUE}
+model <- lm(logT ~ CNT + gender + mother_edu + father_edu + art_books + musical_instr + as.factor(position)/question, qTime34)
+aovar <- aov(model)
+summary(aovar)
+```
+
+## 3.4 Testy post hoc
+Wykres średniego czasu rozwiązania zadania w zależności od odpowiedzi w kwestionariuszu na pytanie o liczbę posiadanych w domu instrumentów sugeruje, że różnica między poziomami "One", "Two" i "Three or more" dla tej zmiennej może być nieistotna statystycznie. Test HSD Tukey'a potwierdza tę hipotezę:
+
+```{r, echo=TRUE, fig.width = 9}
+aov_instr <- aov(logT ~ musical_instr, data = qTime34)
+
+op <- par(mar = c(10,4,4,2) + 0.1) #set marigins
+plot(TukeyHSD(aov_instr), las = 1)
+par(op)
+```
+
+By chociaż trochę zmniejszyć liczbę zmiennych w modelu połączymy poziomy zmiennej _musical_instr_, dla których różnice między średnimi są statystycznie nieistotne:
+
+```{r, echo=TRUE}
+qTime34$musical_instr_yn <- ifelse(qTime34$musical_instr == 'None', 'No', 'Yes')
+summary(aov(lm(logT ~ musical_instr_yn, qTime34)))
+```
+
+W ten sposób konstruujemy nowy model liniowy, którego użyjemy do dalszej analizy:
+```{r, echo=TRUE}
+model <- lm(logT ~ CNT + gender + mother_edu + father_edu + art_books + musical_instr_yn + position + position/question, qTime34)
+```
+
+## 3.5 Wizualizacja modelu
+```{r, fig.width = 9}
+#Beta:
+#2 - 56: CNT
+#57: gender
+#58 - 61: mother_edu
+#62 - 65: father_edu
+#66: art_books
+#67: musical_instr_yn
+#68 - 70: position
+#71 - 246: position / question
+
+coeff.names <- names(model$coefficients)
+coeff <- model$coefficients
+```
+
+```{r, echo=TRUE}
+cnt.names <- unlist(lapply(X = coeff.names[2:56], FUN = function(x) substr(x, 4, 6)))
+
+coeff.df <- data.frame(beta = unname(coeff[2:56]), country = cnt.names)
+
+ggplot(coeff.df, aes(x=reorder(country, -beta), y=beta)) + geom_bar(position = 'dodge', stat = 'identity')+ theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(x = 'Country') + ggtitle("Country")
+```
+
+```{r, echo=TRUE}
+coeff.df <- data.frame(beta = unname(coeff[c(57, 66, 67)]), name = c("Male?", "Musical Instruments?", "Art books?"))
+
+ggplot(coeff.df, aes(x = reorder(name, -beta), y=beta)) + geom_bar(position = 'dodge', stat = 'identity') + labs(x = 'Parameter name') + ggtitle("Binary variables")
+```
+
+```{r, fig.width = 9}
+mother_edu.names = c(levels(qTime34$mother_edu)[2:4], "Did not complete <ISCED level 1>")
+
+father_edu.names = mother_edu.names
+
+coeff.df <- data.frame(beta = c(unname(coeff[58:61]), unname(coeff[62:65])), name = c(mother_edu.names, father_edu.names), Parent = c("Mother", "Mother", "Mother", "Mother", "Father", "Father", "Father", "Father"))
+
+ggplot(coeff.df, aes(fill=Parent, x = reorder(name, -beta), y=beta)) + geom_bar(position = 'dodge', stat = 'identity') + labs(x = 'Education') + ggtitle("Parents' education")
+```
+
+```{r}
+gg_color_hax = c("#7CAE00", "#00BFC4", "#C77CFF")
+
+coeff.df <- data.frame(beta = coeff[68:70], position = 2:4)
+
+ggplot(coeff.df, aes(position, beta)) + geom_bar(position = 'dodge', stat = 'identity', fill=gg_color_hax, color=gg_color_hax)
+```
+
+```{r, fig.width = 9}
+coeff.p <- unlist(lapply(X = coeff.names[71:246], FUN = function(x) substr(x, 9, 9)))
+coeff.q <- unlist(lapply(X = coeff.names[71:246], FUN = function(x) substr(x, 19, 22)))
+coeff.df <- data.frame(beta = unname(coeff[71:246]), position = coeff.p, question = coeff.q)
+
+ggplot(coeff.df, aes(fill=position, x=reorder(question, -beta), y=beta)) + facet_wrap(~position) + geom_bar(position = 'dodge', stat = 'identity')+ theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(x = 'question')
+```
+
+## 3.6 Diagnostyka modelu
+Na wykresie Q-Q poniżej widać, że rozkład reszt znacznie odbiega w ogonach od normalnego.
+
+```{r}
+qqnorm(model$res)
+qqline(model$res)
+hist(model$res, main="Histogram of residue values", xlab="Residue")
+```
+
+Model nie przechodzi testu heteroskedastyczności reszt Breuscha-Pagana:
+```{r}
+lmtest::bptest(model)
+```
+
+Model nie przechodzi też testu Durbina-Watsona - istnieje autokorelacja między resztami:
+```{r}
+lmtest::dwtest(model, alternative = "two.sided")
+```
