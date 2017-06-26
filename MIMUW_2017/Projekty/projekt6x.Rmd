@@ -1,0 +1,149 @@
+---
+title: "Projekt 6"
+author: "Anna Wójcik, Dawid D¹bkowski, Grzegorz Ziajka"
+date: "27 maja 2017"
+output: 
+  html_document: 
+      toc: TRUE
+      number_sections: TRUE
+      toc_float: TRUE
+---
+#Podsumowanie
+
+W tym etapie próbowaliœmy przeprowadziæ transformacjê zmiennych objaœniaj¹cych BOOKID i CNT oraz interakcji miêdzy tymi zmiennymi a p³ci¹. Jedynie pogrupowanie interakcji miêdzy zmienn¹ opisuj¹c¹ kraj i zmienn¹ opisuj¹c¹ p³eæ poprawi³o kryteria AIC oraz BIC, dlatego do dalszych analiz wybieramy ten model.
+
+#Przygotowanie danych
+
+```{r,message=FALSE, warning=FALSE}
+library("agricolae")
+library("ggplot2")
+library("tidyr")
+library("lmtest")
+library("dplyr")
+library("factorMerger")
+``` 
+```{r, cache = TRUE, warning=FALSE}
+load("C:/Users/Anna/Downloads/actionTimeScoreGender.rda") # dane o zadaniach z matematyki plus plec
+
+actionTimeScoreGender <- separate(actionTimeScoreGender, item_short, into = c('M', 'Q'), sep = 4)
+
+actionTimeScoreGender$M <- as.factor(actionTimeScoreGender$M)
+actionTimeScoreGender$Q <- as.factor(actionTimeScoreGender$Q)
+actionTimeScoreGender$position <- replace(actionTimeScoreGender$position, actionTimeScoreGender$position==-1, NA)
+actionTimeScoreGender$position <- droplevels(actionTimeScoreGender$position)
+
+indeksy <- quantile(actionTimeScoreGender$T, probs=c(0.01, 0.99))
+actionTimeScoreGender <- filter(actionTimeScoreGender, T <= indeksy[2])
+actionTimeScoreGender <- filter(actionTimeScoreGender, T >= indeksy[1])
+
+actionTimeScoreGender <- actionTimeScoreGender[complete.cases(actionTimeScoreGender),]
+
+actionTimeScoreGenderSample <- sample_n(actionTimeScoreGender, 500000)
+```
+
+#Przypomnienie wyjœciowego modelu
+
+Model, który wybraliœmy w poprzednich etapach zawiera szeœæ jakoœciowych zmiennych objaœniaj¹cych.
+
+```{r,cache=TRUE}
+model1=lm(sqrt(T) ~position + M/Q+ST004D01T*CNT+ST004D01T*BOOKID, data = actionTimeScoreGenderSample)
+```
+```{r}
+AIC(model1)
+BIC(model1)
+```
+
+#Grupowanie zmiennej CNT
+
+Spróbujemy pogrupowaæ zmienn¹ opisuj¹c¹ kraj ucznia i sprawdzimy czy poprawi to kryteria informacyjne.
+
+```{r}
+fm_CNT <- mergeFactors(sqrt(actionTimeScoreGenderSample$T), droplevels(actionTimeScoreGenderSample$CNT),method= "hclust",successive = TRUE,penalty=1)
+```
+```{r}
+actionTimeScoreGenderSample$fm_CNT=cutTree(fm_CNT)
+model=lm(sqrt(T) ~position+M/Q+ST004D01T*fm_CNT+ST004D01T*BOOKID, data = actionTimeScoreGenderSample)
+AIC(model)
+BIC(model)
+```
+
+Grupowanie zmiennej opisuj¹cej kraj poprawi³o kryterium BIC, ale pogorszy³o kryterium AIC.
+
+#Grupowanie zmiennej BOOKID
+
+Spróbujemy pogrupowaæ zmienn¹ opisuj¹c¹ indeks podrêcznika i sprawdzimy czy poprawi to kryteria informacyjne.
+
+```{r}
+fm_BOOKID <- mergeFactors(sqrt(actionTimeScoreGenderSample$T), droplevels(actionTimeScoreGenderSample$BOOKID),successive = TRUE)
+```
+```{r}
+actionTimeScoreGenderSample$fm_BOOKID=cutTree(fm_BOOKID)
+model=lm(sqrt(T) ~position + M/Q+ST004D01T*CNT+ST004D01T*fm_BOOKID, data = actionTimeScoreGenderSample)
+AIC(model)
+BIC(model)
+```
+ 
+Grupowanie zmiennej opisuj¹cej indeks podrêcznika pogorszy³o oba kryteria informacyjne. 
+ 
+#Przygotowanie kolumn odpowiadaj¹cych interakcjom
+
+W powy¿szym modelu mamy do czynienia z dwiema interakcjami, miêdzy p³ci¹ a krajem oraz p³ci¹ a indeksem podrêcznika. Spróbujemy po³¹czyæ podobne do siebie poziomy tych interakcji, by zmniejszyæ liczbê parametrów modelu i poprawiæ tym samym kryteria informacyjne.
+
+W tym celu przygotujemy kolumny, które bêd¹ odpowiadaæ interakcjom.
+
+```{r}
+actionTimeScoreGenderSample$CNT_SEX <- paste(actionTimeScoreGenderSample$CNT,actionTimeScoreGenderSample$ST004D01T, sep="_")
+actionTimeScoreGenderSample$CNT_SEX<-as.factor(actionTimeScoreGenderSample$CNT_SEX)
+```
+
+```{r}
+actionTimeScoreGenderSample$BOOKID_SEX <- paste(actionTimeScoreGenderSample$BOOKID,actionTimeScoreGenderSample$ST004D01T, sep="_")
+actionTimeScoreGenderSample$BOOKID_SEX<-as.factor(actionTimeScoreGenderSample$BOOKID_SEX)
+```
+
+#Grupowanie interakcji miêdzy krajem a p³ci¹
+
+Teraz pogrupujemy zmienn¹ opisuj¹c¹ interakcjê miêdzy krajem a p³ci¹ i sprawdzimy czy poprawi to kryteria informacyjne.
+
+
+```{r}
+fm_CNT_SEX <- mergeFactors(sqrt(actionTimeScoreGenderSample$T), droplevels(actionTimeScoreGenderSample$CNT_SEX),method= "hclust",successive = TRUE)
+```
+
+```{r}
+actionTimeScoreGenderSample$fm_CNT_SEX=cutTree(fm_CNT_SEX)
+model=lm(sqrt(T) ~position + M/Q+CNT+fm_CNT_SEX+ST004D01T*BOOKID, data = actionTimeScoreGenderSample)
+AIC(model)
+BIC(model)
+```
+
+Oba kryteria informacyjne poprawi³y siê. Jak do tej pory jest to najlepszy model pod tym wzglêdem.
+
+#Grupowanie interakcji miêdzy indeksem podrêcznika a p³ci¹
+
+Teraz badamy co stanie siê po pogrupowaniu interakcji miêdzy indeksem podrêcznika a p³ci¹.
+
+```{r}
+fm_BOOKID_SEX <- mergeFactors(sqrt(actionTimeScoreGenderSample$T), droplevels(actionTimeScoreGenderSample$BOOKID_SEX),method= "hclust",successive = TRUE,penalty=2)
+```
+```{r}
+actionTimeScoreGenderSample$fm_BOOKID_SEX=cutTree(fm_BOOKID_SEX)
+model=lm(sqrt(T) ~position + M/Q+CNT+fm_BOOKID_SEX+ST004D01T*CNT, data = actionTimeScoreGenderSample)
+AIC(model)
+BIC(model)
+```
+
+Kryteria informacyjne w porównaniu z wyjœciowym modelem pogorszy³y siê.
+
+#Wizualizacja grupowania
+
+Jedynie grupowanie interakcji miêdzy zmiennymi opisuj¹cymi kraj i p³eæ poprawi³o oba kryteria informacyjne, dlatego ten model wybieramy do dalszych analiz oraz przedstawimy wizualizacjê wybranego grupowania.
+
+```{r,fig.width = 15, fig.height = 25, warning=FALSE}
+plot(fm_CNT_SEX,color=TRUE,panel="response", responsePanel="boxplot")
+```
+
+Na powy¿szym wykresie pude³kowym mo¿emy zobaczyæ, w jaki sposób poziomy zosta³y ze sob¹ po³¹czone.Ten sam kolor oznacza jeden poziom zmiennej fm_CNT_SEX. Liczba parametrów modelu spad³a z 330 do 220 w porównaniu z modelem wyjœciowym.
+
+
+
