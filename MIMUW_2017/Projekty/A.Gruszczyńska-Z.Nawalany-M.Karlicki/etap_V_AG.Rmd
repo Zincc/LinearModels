@@ -1,0 +1,198 @@
+---
+title: "Etap V"
+author: "Zofia Nawalany, Agata Gruszczyńska, Michał Karlicki"
+date: "4 czerwca 2017"
+output: html_document
+---
+#Spis treści  
+[1.Cel](#1.Cel)  
+[2.Podsumowanie](#2.Podsumowanie etapu III)  
+[3.Efekt płci i kraju](#3.Efekt płci i kraju)  
+[4.Efekt zadania i jego pozycji w kwestionariuszu](#4.Efekt zadania i jego pozycji w kwestionariuszu)  
+[5.Efekt kraju i języka](#5.Efekt kraju i języka)
+[6.Efekt czytania czasopism naukowych i wykształcenia ojca](#6.Efekt czytania czasopism naukowych i wykształcenia ojca)
+[7.Efekt czytania czasopism naukowych i wykształcenia matki](#7.Efekt czytania czasopism naukowych i wykształcenia matki)
+[8.Efekt wykształcenia ojca i matki](#8.Efekt wykształcenia ojca i matki)
+[9. Zbadanie istotności interakcji w modelu](#9. Zbadanie istotności interakcji w modelu) 
+
+#1.Cel <a name="1.Cel"></a>
+Celem tego etapu projektu jest rozważenie i weryfikacja występowania, jak i istotności interakcji pomiędzy kluczowymi elementami modelu. Przeanalizowaliśmy interakcje pomiędzy efektami:
+- płci i kraju  
+- zadania i jego pozycji w kwestionariuszu
+- kraju i używanego języka
+- czytania czasopism naukowych i wykształcenia ojca
+- czytania czasopism naukowych i wykształcenia matki
+
+```{r, echo=FALSE, warning=F, message=F}
+#load("C:/Users/Gruszka/Documents/STUDIA/BioinformatykaUW/sem2_Bioinf/Biecek/Projekt R/etap III/data2.Rda")
+#load("C:/Users/Gruszka/Documents/STUDIA/BioinformatykaUW/sem2_Bioinf/Biecek/Projekt R/modele_liniowe-master/data.Rda")
+load("/Users/michalkarlicki/data2.Rda")
+load("/Users/michalkarlicki/modele_liniowe/data.Rda")
+
+library(foreign)
+library(outliers)
+library(ggplot2)
+library(nortest)
+library(lmtest)
+library(broom)
+library(plyr)
+library(dplyr)
+library(agricolae)
+
+
+rozwazane_zmienne<-cbind.data.frame(atsm3$CNTSTUID, atsm3$CNT, atsm3$ST004D01T, atsm3$ST006Q01TA, atsm3$ST008Q01TA, atsm3$LANGTEST_COG, atsm3$ST146Q04TA)
+
+colnames(rozwazane_zmienne)<-c('CNTSTUID','kraj','plec', 'wyksztalcenie_M', 'wyksztalcenie_O', 'jezyk', 'czytanieCzasopismNaukowych')
+
+dane<-merge(atsm2,rozwazane_zmienne, by="CNTSTUID")
+dane<- subset(dane, select=-subject)
+#j<-c((unique(as.character(dane$jezyk))))
+dane2<-as.matrix(gsub("No Response", "brak danych", dane$jezyk))
+dane2[][is.na(dane2[])] <- "brak danych"
+dane$jezyk<-dane2
+#M<-c((unique(as.character(dane$wyksztalcenie_M))))
+dane3<-as.matrix(gsub("No Response", "brak danych", dane$wyksztalcenie_M))
+dane3<-as.matrix(gsub("No", "maksymalnie średnie", dane3))
+dane3<-as.matrix(gsub("Yes", "wyższe", dane3))
+dane3[][is.na(dane3[])] <- "brak danych"
+dane$wyksztalcenie_M<-dane3
+#O<-c((unique(dane$wyksztalcenie_O)))
+dane4<-as.matrix(gsub("No Response", "brak danych", dane$wyksztalcenie_O))
+dane4<-as.matrix(gsub("No", "maksymalnie średnie", dane4))
+dane4<-as.matrix(gsub("Yes", "wyższe", dane4))
+dane4[][is.na(dane4[])] <- "brak danych"
+dane$wyksztalcenie_O<-dane4
+```
+
+#2.Podsumowanie  <a name="2.Podsumowanie"></a>
+Znalezione w tym etapie interakcje uwzględniono we wcześniej stworzonym modelu. Na podsawie wyników analizy wariancji wynika, ze wszystkie znalezione iterakcje są istotne dla nowego modelu. 
+
+#3.Efekt płci i kraju <a name="3.Efekt płci i kraju"></a>
+Nie obserwuje się różnic w średnim czasie rozwiązywania zadań między płciami wśród krajów postkolonialnych.
+```{r}
+int1 <- ddply(dane,.(kraj,plec),summarise, val = mean(log(question_time)))
+
+ggplot(dane, aes(x = factor(kraj), y = log(question_time), colour = plec)) + 
+    geom_point(data = int1, aes(y = val)) +
+    geom_line(data = int1, aes(y = val, group = plec)) +   
+    theme_bw()+
+    theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+    xlab("Kraj")+
+    ylab("Średni czas zadania")+
+    ggtitle("Interakcje między płciami a średnim czasem rozwiązywania zadań w różnych krajach")
+```
+#4.Efekt zadania i jego pozycji w kwestionariuszu <a name="4.Efekt zadania i jego pozycji w kwestionariuszu"></a>
+Każde zadanie będąc usytuowane w kwestionariuszu na pozycji pierwszej (pomarańczowa linia) było rozwiązywane dłużej niż będąc na pozostałych pozycjach. Zadaniu usytuowanemu jako ostatnie w kwestionariuszu zazwyczaj poświęcano najmniej czasu.
+```{r}
+int1 <- ddply(dane,.(item,position),summarise, val = mean(log(question_time)))
+
+ggplot(dane, aes(x = factor(item), y = log(question_time), colour = position)) + 
+    geom_point(data = int1, aes(y = val)) +
+    geom_line(data = int1, aes(y = val, group = position)) +   
+    theme_bw()+
+    theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+    xlab("Numer zadania")+
+    ylab("Średni czas zadania")+
+    ggtitle("Interakcje między numerem zadania a jego pozycją")
+
+
+```
+#5.Efekt kraju i języka <a name="5.Efekt kraju i języka"></a>
+Osoby posługujące się językiem hiszpańskim lub portugalskim niezależnie od kraju rozwiązywali zadania widocznie dłużej.
+Najkrócej zadania rozwiązywały osoby posługujące się językiem chińskim i angielskim. Średni czas rozwiązywania zadań dla Tunezji (jedynego kraju reprezentujacego język arabski) również wypadł wysoko jednak może to być związane z niedoreprezentowaniem tego języka przez inne kraje.
+
+```{r}
+int1 <- ddply(dane,.(kraj,jezyk),summarise, val = mean(log(question_time)))
+
+ggplot(dane, aes(x = factor(kraj), y = log(question_time), colour = jezyk)) + 
+    geom_point(data = int1, aes(y = val)) +
+    geom_line(data = int1, aes(y = val, group = jezyk)) +   
+    theme_bw()+
+    theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+    xlab("Kraj")+
+    ylab("Średni czas zadania")+
+    ggtitle("Interakcje między krajem a średnim czasem rozwiązywania zadań w zależności od języka")
+```
+
+#6.Efekt czytania czasopism naukowych i wykształcenia ojca <a name="6.Efekt czytania czasopism naukowych i wykształcenia ojca"></a>
+Czytanie czasopism naukowych pozytywnie wpływa na czas rozwiązywania zadań w przypadku maksymalnie średniego wykształcenia ojca, a im częściej uczeń czyta tym krótszy czas rozwiązania. Uczniowie, nie czytający prawie wcale, wyraźnie więcej czasu spędzają nad pojedyńczym zadaniem. W przypadku gdy ojciec ma wykształcenie wyższe tendecja jest pomijalnie rosnącą w stosunku do częstości czytania, czyli nie ma wpływu.
+```{r}
+daneCO<-cbind(dane$CNTSTUID, as.vector(as.character(dane$question_time)), as.character(dane$czytanieCzasopismNaukowych), dane$wyksztalcenie_O)
+colnames(daneCO)<-c("CNTSTUID", "question_time", "czytanieCzasopismNaukowych", "wyksztalcenie_O")
+daneCO<-as.data.frame(na.omit(daneCO))
+daneCO<-daneCO[daneCO$czytanieCzasopismNaukowych!="No Response",]
+daneCO<-daneCO[!daneCO$wyksztalcenie_O == "brak danych", ]
+
+int1 <- ddply(daneCO,.(czytanieCzasopismNaukowych,wyksztalcenie_O),summarise, val = mean(log(as.numeric(question_time))))
+
+ggplot(daneCO, aes(x = factor(czytanieCzasopismNaukowych), y = log(question_time), colour = wyksztalcenie_O)) + 
+    geom_point(data = int1, aes(y = val)) +
+    geom_line(data = int1, aes(y = val, group = wyksztalcenie_O)) +   
+    theme_bw()+
+    theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+    xlab("Czytanie czasopism naukowych")+
+    ylab("Średni czas zadania")+
+    ggtitle("Interakcje między wykształceniem ojca i czytaniem czasopism naukowych")
+```
+#7.Efekt czytania czasopism naukowych i wykształcenia matki <a name="7.Efekt czytania czasopism naukowych i wykształcenia matki"></a>
+Dla maksymalnie średniego wykształcenia matki czas rozwiązywania zadania jest znącząco krótszy gdy uczeń czyta czasopisma względem gdy nie czyta wcale.
+```{r}
+daneCM<-cbind(dane$CNTSTUID, as.vector(as.character(dane$question_time)), as.character(dane$czytanieCzasopismNaukowych), dane$wyksztalcenie_M)
+colnames(daneCM)<-c("CNTSTUID", "question_time", "czytanieCzasopismNaukowych", "wyksztalcenie_M")
+daneCM<-as.data.frame(na.omit(daneCM))
+daneCM<-daneCM[daneCM$czytanieCzasopismNaukowych!="No Response",]
+daneCM<-daneCM[!daneCM$wyksztalcenie_M == "brak danych", ]
+
+int1 <- ddply(daneCM,.(czytanieCzasopismNaukowych,wyksztalcenie_M),summarise, val = mean(log(as.numeric(question_time))))
+
+ggplot(daneCM, aes(x = factor(czytanieCzasopismNaukowych), y = log(question_time), colour = wyksztalcenie_M)) + 
+    geom_point(data = int1, aes(y = val)) +
+    geom_line(data = int1, aes(y = val, group = wyksztalcenie_M)) +   
+    theme_bw()+
+    theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+    xlab("Czytanie czasopism naukowych")+
+    ylab("Średni czas zadania")+
+    ggtitle("Interakcje między wykształceniem matki i czytaniem czasopism naukowych")
+    
+  
+```
+
+#8.Efekt wykształcenia ojca i matki <a name="8.Efekt wykształcenia ojca i matki"></a>
+Wykształcenie ojca na poziomie wyższym przekłada się na krótszy czas poświęcany na zadanie. Na wykresie widoczne jest przecięcie, co oznacza interakcję pomiędzy wykształceniem ojca i matki.
+```{r}
+int1 <- ddply(dane,.(wyksztalcenie_O,wyksztalcenie_M),summarise, val = mean(log(as.numeric(question_time))))
+
+ggplot(dane, aes(x = factor(wyksztalcenie_O), y = log(question_time), colour = wyksztalcenie_M)) + 
+    geom_point(data = int1, aes(y = val)) +
+    geom_line(data = int1, aes(y = val, group = wyksztalcenie_M)) +   
+    theme_bw()+
+    theme(axis.text.x = element_text(angle = 0, hjust = 0.5))+
+    xlab("Wykształcenie ojca")+
+    ylab("Średni czas zadania")+
+    ggtitle("Interakcje między wykształceniem ojca i matki")
+```
+
+```{r}
+int1 <- ddply(dane,.(wyksztalcenie_M,wyksztalcenie_O),summarise, val = mean(log(as.numeric(question_time))))
+
+ggplot(dane, aes(x = factor(wyksztalcenie_M), y = log(question_time), colour = wyksztalcenie_O)) + 
+    geom_point(data = int1, aes(y = val)) +
+    geom_line(data = int1, aes(y = val, group = wyksztalcenie_O)) +   
+    theme_bw()+
+    theme(axis.text.x = element_text(angle = 0, hjust = 0.5))+
+    xlab("Wykształcenie matki")+
+    ylab("Średni czas zadania")+
+    ggtitle("Interakcje między wykształceniem matki i ojca")
+
+```
+
+#9. Zbadanie istotności interakcji w modelu <a name="9. Zbadanie istotności interakcji w modelu"></a>
+W celu zbadania istotności znalezionych powyżej interakcji, modyfikujemy nasz model z poprzednich etapów. Wykonujemy analizę wariancji dla zmodyfikowanego modelu i sprawdzamy istotnośćrozważanych interakcji.
+```{r}
+model<-(lm(log(question_time)~position*item+jezyk+kraj+plec+wyksztalcenie_M*wyksztalcenie_O+czytanieCzasopismNaukowych, data=dane))
+
+anova(model)
+```
+Na podstawie wyniku analizy wariancji można stwierdzić, że wszystkie analizowane interakcje są istotne.
+
+

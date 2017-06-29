@@ -1,0 +1,368 @@
+---
+title: "Etap 7: Model mieszany na cechach zadania i ucznia z poprawnie wskazanymi efektami losowymi/sta³ymi"
+author: "Micha³ Ciach, Ola Paluszyñska"
+date: "14 czerwca 2017"
+output: 
+    html_document:
+        toc: true
+        toc_depth: 3
+        toc_float: true
+        number_sections: true
+---
+
+```{r setup, include = FALSE, cache = FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, cache = TRUE, cache.lazy = FALSE)
+library(ggplot2)
+library(lme4)
+setwd("~/UW/Modele_Liniowe_i_Mieszane/Projekt")
+options(digits = 4)
+load("Projekt_probka.rda")
+```
+
+# Streszczenie wyników
+
+Celem niniejszego etapu projektu jest budowa modelu mieszanego objaœniaj¹cego badane zjawisko, czyli transformacjê Boxa-Coxa czasu rozwi¹zywania zadania przez uczniów.
+
+W pierwszym kroku tej analizy przygl¹damy siê w³¹czonym do tej pory efektom sta³ym i zastanawiamy siê, czy powinny pozostaæ w³¹czone do modelu w tej postaci. Na podstawie du¿ej i niekompletnej listy poziomów zmiennych wskazuj¹cych na zadanie, kwestionariusz i kraj stwierdzamy, ¿e ka¿dy z tych efektów móg³by byæ losowy, a nastêpnie porównujemy modele mieszane z zamian¹ ka¿dego z tych efektów sta³ych na losowy. Po zaobserwowaniu najwiêkszej poprawy kryteriów informacyjnych przy uwzglêdnieniu efektu kwestionariusza jako losowego postanawiamy pozostaæ przy takiej modyfikacji wyjœciowego modelu, a pozosta³e efekty pozostawiæ w nim jako sta³e.
+
+W drugim kroku analizy rozpatrujemy dodanie do modelu efektów losowych szko³y, ucznia lub ucznia zagnie¿d¿onego w szkole. Efekty te spe³niaj¹ wszelkie kryteria, jakie powinny spe³niaæ w modelu efekty losowe. Dodatkowo, liczba ich poziomów jest na tyle du¿a, ¿e przy dostêpnej nam mocy obliczeniowej uniemo¿liwi³a w³¹czenie ich jako efektów sta³ych na poprzednich etapach analizy. Ostatecznie okazuje siê, ¿e zarówno efekt szko³y jak i ucznia poprawiaj¹ dopasowanie modelu do danych, a ich istotnoœæ potwierdzamy testami ilorazu wiarygodnoœci oraz permutacyjnymi. Ostatecznie w modelu uwzglêdniamy te¿ losowe nachylenia wybrane na podstawie kryteriów informacyjnych w celu wyjaœnienia dodatkowej zmiennoœci.
+
+W trzecim kroku analizy szacujemy parametry wybranego w poprzednich krokach modelu i pokazujemy wybrane efekty sta³e (kraju i liczby ksi¹¿ek) na wykresie -- okazuj¹ siê one byæ podobne do otrzymanych na poprzednich etapach analizy. Na podstawie oszacowañ macierzy wariancji-kowariancji efektów losowych stwierdzamy, ¿e najwiêcej zmiennoœci powoduje zró¿nicowanie wœród uczniów, wyraŸnie mniej zró¿nicowanie wœród kwestionariuszy, a najmniej -- zró¿nicowanie wœród szko³ami. Niemniej jednak wszystkie te efekty wyraŸnie poprawiaj¹ jakoœæ modelu.
+
+# Efekty sta³e
+
+## Wyjœciowy model efektów sta³ych
+
+Celem niniejszego etapu pracy jest budowa modelu mieszanego opisuj¹cego wybran¹ przez nas w poprzednim etapie transformacjê czasu rozwi¹zywania zadania. Ogólnie, efekty sta³e i losowe, które sk³adaj¹ siê na model mieszany, mo¿na wybieraæ na ró¿ne sposoby i w ró¿nej kolejnoœci. My bêdziemy siê przede wszystkim trzymaæ nastêpuj¹cego schematu: do stworzonego w poprzednich etapach modelu efektów sta³ych bêdziemy rozwa¿ali dodanie efektów losowych sprawdzaj¹c czy poprawia to jakoœæ modelu. Nasz dotychczasowy model efektów sta³ych jest nastêpuj¹cy:
+
+```{r, cache = FALSE}
+# modelBase <- lm(time.bc ~ score*(task + edu_resources + no_of_books + wealth + book_id + father_edu_num + father_edu_na) + mother_edu + female + country, data = probka)
+# save(modelBase, file = "Etap7_modelBase.rda")
+load("Etap7_modelBase.rda")
+crit_base <- c(AIC = AIC(modelBase), BIC = BIC(modelBase))
+anova(modelBase); rm(modelBase)
+```
+
+Powy¿ej widaæ, ¿e wszystkie zmienne w modelu s¹ istotne (`father_edu_num` jest "ledwo" istotna, ale istotnoœæ interakcji tej zmiennej ze zmienn¹ `score` nie pozostawia ¿adnych w¹tpliwoœci). Widaæ, ¿e najwiêcej zmiennoœci wyjaœniaj¹ zmienne `task`, `task:score` oraz `score`. Teraz uzasadnimy, dlaczego prawie wszystkie obecne w modelu zmienne chcemy pozostawiæ w nim jako efekty sta³e (dodawanie efektów losowych oprzemy przede wszystkim o zmienne wskazuj¹ce na szko³y i uczniów (`school_id`, `student_id`), których nie mogliœmy uwzglêdniæ na poprzednich etapach analizy ze wzglêdu na ich du¿¹ liczbê poziomów).
+
+Zmienne w modelu mo¿emy podzieliæ na trzy grupy:
+
+(1) zmienne iloœciowe: `edu_resources`, `wealth`, `father_edu_num`
+
+(2) zmienne jakoœciowe o ma³ej liczbie kategorii wyczerpuj¹cych wszystkie mo¿liwoœci: `score`, `no_of_books`, `father_edu_na`, `mother_edu`, `female`
+
+(3) zmienne jakoœcioweo du¿ej liczbie kategorii niewyczerpuj¹cych wszystkich mo¿liwoœci: `task`, `book_id`, `country`.
+
+Zmienne z grupy (1) nie s¹ jakoœciowe, a wiêc ¿eby w³¹czyæ je do modelu jako efekty losowe musielibyœmy zamieniæ je na jakoœciowe (np. pogrupowaæ przedzia³ami) co tylko w przypadku `father_edu_num` bêdzie niearbitralne ze wzglêdu na to, ¿e zmienna ta powsta³a na poprzednim etapie pracy ze zmiennej jakoœciowej. Takie podejœcie nie jest wed³ug nas odpowiednie -- dzielenie na przedzia³y nie tylko wi¹¿e siê z utrat¹ informacji, ale równie¿ prowadzi do powstania zmiennych nale¿¹cych do grupy (2), których nie chcemy uwzglêdniaæ jako efekty losowe z nastêpuj¹cych przyczyn. 
+
+Zmienne z grupy (2) nie spe³niaj¹ ¿adego z kryteriów w³¹czania do modelu jako efekt losowy: lista ich poziomów jest kompletna, liczba tych poziomów niewielka i niezale¿na od liczby obserwacji, a ponadto interesuje nas wp³yw tych zmiennych na zmienn¹ objaœnian¹.
+
+Zmienne z grupy (3) do tej pory w³¹czaliœmy do modelu jako efekty sta³e, jednak: lista poziomów tych zmiennych nie jest kompletna i jest doœæ liczna, a ponadto w przypadku `task` i `book_id` nie interesuje nas wp³yw konkretnych poziomów tych zmiennych na zmienn¹ objaœnian¹. Z tego wzglêdu rozwa¿ymy uwzglêdnienie tych zmiennych jako efektów losowych.
+
+## Czy efekty z grupy (3) powinny byæ losowe?
+
+Dla ka¿dej ze zmiennych `task`, `score` oraz `country` zbudujemy model z efektem losowym dla tej zmiennej i za pomoc¹ kryteriów informacyjnych porównamy go do modelu uwzglêdniaj¹cego tê zmienn¹ jako efekt sta³y. Niestety, nie mo¿emy w tym przypadku wykorzystaæ do porównania testu ilorazu wiarygodnoœci, gdy¿ porównywane modele nie s¹ zagnie¿d¿one. Dodatkowo, w celu porównywalnoœci kryteriów informacyjnych wykorztamy metodê estymacji ML zamiast REML.
+
+### Efekt losowy zadania
+
+```{r, cache = FALSE}
+# modelRanTask <- lmer(time.bc ~ score*(edu_resources + no_of_books + wealth + book_id + father_edu_num + father_edu_na) + mother_edu + female + country + (1 + score | task), data = probka, REML = FALSE)
+# save(modelRanTask, file = "Etap7_modelRanTask.rda")
+load("Etap7_modelRanTask.rda")
+zadanie <- c(AIC = AIC(modelRanTask), BIC = BIC(modelRanTask)); rm(modelRanTask)
+```
+
+### Efekt losowy kwestionariusza
+
+```{r, cache = FALSE}
+# modelRanBook <- lmer(time.bc ~ score*(task + edu_resources + no_of_books + wealth + father_edu_num + father_edu_na) + mother_edu + female + country + (1 + score | book_id), data = probka, REML = FALSE)
+# save(modelRanBook, file = "Etap7_modelRanBook.rda")
+load("Etap7_modelRanBook.rda")
+kwestionariusz <- c(AIC = AIC(modelRanBook), BIC = BIC(modelRanBook)); rm(modelRanBook)
+```
+
+### Efekt losowy kraju
+
+```{r, cache = FALSE}
+# modelRanCountry <- lmer(time.bc ~ score*(task + edu_resources + no_of_books + wealth + book_id + father_edu_num + father_edu_na) + mother_edu + female + (1 | country), data = probka, REML = FALSE)
+# save(modelRanCountry, file = "Etap7_modelRanCountry.rda")
+load("Etap7_modelRanCountry.rda")
+kraj <- c(AIC = AIC(modelRanCountry), BIC = BIC(modelRanCountry)); rm(modelRanCountry)
+```
+
+### Wybór modelu
+
+Kryteria informacyjne dla oszacowanych powy¿ej modeli s¹ nastêpuj¹ce:
+
+```{r, cache = FALSE}
+data.frame(stary = crit_base, zadanie = zadanie, kwestionariusz = kwestionariusz, kraj = kraj)
+```
+
+Jak widaæ ¿aden z nowych modeli nie poprawia kryterium AIC, ale wszystkie poprawiaj¹ kryterium BIC, przy czym obie zmiany s¹ najwyraŸniejsze w modelu z efektem losowym kwestionariusza i najmniej wyraŸne w modelu z efektem losowym zadania. Z tego wzglêdu decydujemy siê uwzglêdniæ zmienn¹ `book_id` jako efekt losowy, a nie sta³y, a pozosta³e dwie zmienne pozostawiæ w formie efektów sta³ych.
+
+Warto zaznaczyæ, ¿e choæ nowy model ma o 98 parametrów mniej od modelu z samymi efektami sta³ymi (mia³ on 34 parametry dla `book_id` i 70 dla interakcji ze `score`, nowy ma trzy efekty losowe -- wyraz wolny i nachylenie dla dwóch kategorii `score` plus trzy wspó³czynniki korelacji miêdzy tymi efektami), to jego estymacja kilkakrotnie d³u¿ej, a wiêc po pierwsze nie chcemy uwzglêdniaæ zbyt du¿ej liczby efektów losowych i decydujemy siê tylko na `book_id` z trzech zaproponowanych do tej pory, a po drugie zamiany efektu sta³ego `book_id` na losowy dokonamy dopiero na koñcu tego etapu po wyborze pozosta³ych efektów losowych, co umo¿liwi nam rozpatrzenie wiêkszej liczby modeli w tym samym czasie.
+
+```{r}
+rm(list = ls()); load("Projekt_probka.rda")
+```
+
+# Efekty losowe
+
+Maj¹c ustalon¹ strukturê efektów sta³ych w naszym modelu rozwa¿ymy dodanie efektów losowych szko³y (`school_id`) i ucznia (`student_id`). Obie zmienne nie tylko spe³niaj¹ wszystkie kryteria na w³¹czenie do modelu efektu jako losowego (niekompletny zestaw kategorii, ich liczba jest du¿a i zale¿y od liczby obserwacji, nie interesuje nas wp³yw poszczególnych kategorii na wynik), ale równie¿ ze wzglêdu na olbrzymi¹ liczbê poziomów i ograniczon¹ pamiêæ na naszych komputerach nie mamy mo¿liwoœci w³¹czenia ich do modelu jako efektów sta³ych.
+
+Ze wzglêdu na czas wykonywania testu permutacyjnego istotnoœci efektów losowych zastosujemy go dopiero na koñcu ¿eby zweryfikowaæ istotnoœæ efektów losowych w ostatecznym modelu. Natomiast podczas selekcji modelu bêdziemy korzystaæ ze znacznie szybszego testu ilorazu wiarygodnoœci, dla którego nie s¹ spe³nione za³o¿enia jeœli testujemy istotnoœæ wariancji efektu losowego, wiêc jest on jedynie pewnym przybli¿eniem, gdy¿ formalnie nie jest poprawny w tej sytuacji.
+
+## Efekt losowy szko³y
+
+Mo¿na przypuszczaæ, ¿e wystêpuje pewien "efekt szko³y" wp³ywaj¹cy na czas rozwi¹zywania zadañ: niektóre szko³y mog¹ dobrze przygotowywaæ do szybkiego rozwi¹zywania testów (np. maj¹c nastawion¹ na to kadrê nauczycieli czy potencjalnie pomocne lepsze wyposa¿enie). Na tym etapie analizy uwzglêdnimy w modelu zarówno losowy wyraz wolny w zale¿noœci od szko³y jak i zró¿nicowanie we wspó³czynnikach nachylenia.
+
+### Losowy wyraz wolny
+
+Najprostszym sposobem uwzglêdnienia efektu losowego szko³y jest w³¹czenie do modelu losowego wyrazu wolnego dla szkó³, przy czym zak³adamy, ¿e rozk³ad tego efektu jest normalny ze œredni¹ zero. Na poni¿szym wykresie przedstawiamy œrednie reszty modelu wyjœciowego dla szkó³ (liczymy œrednie reszty a nie zmienn¹ objaœnian¹ w celu wyeliminowania wp³ywu uwzglêdnionych ju¿ efektów sta³ych) -- widaæ, ¿e przedstawiony rozk³ad przypomina normalny, a wiêc nasze za³o¿enie wydaje siê sensowne.
+
+```{r}
+load("Etap7_modelBase.rda")
+ggplot(aggregate(residuals ~ school_id, data.frame(residuals = residuals(modelBase), school_id = probka$school_id), mean), aes(x = residuals)) + geom_histogram(binwidth = 0.03, color = "black", fill = "white") + ggtitle("Rozk³ad œrednich reszt modelu wyjœciowego w szko³ach ")
+```
+
+Poni¿ej przeprowadzamy test ilorazu wiarygodnoœci istotnoœci efektu losowego szko³y: przy ka¿dym sensownym poziomie istotnoœci odrzucamy hipotezê zerow¹ o nieistotnoœci tego efektu. Ponadto, oba kryteria informacyjne wskazuj¹ na model z efektem losowym jako na lepszy.
+
+```{r school_random_intercept, cache = FALSE}
+# modelRanSchool <- lmer(time.bc ~ score*(task + edu_resources + no_of_books + wealth + book_id + father_edu_num + father_edu_na) + mother_edu + female + country + (1 | school_id), data = probka, REML = FALSE)
+# save(modelRanSchool, file = "Etap7_modelRanSchool.rda")
+load("Etap7_modelRanSchool.rda")
+as.data.frame(anova(modelRanSchool, modelBase)); rm(modelBase)
+```
+
+### Losowy wspó³czynnik nachylenia
+
+Oprócz losowego wyrazu wolnego w modelu mieszanym mo¿emy równie¿ uwzglêdniæ losowy wspó³czynnik nachylenia dla wybranych zmiennych, przy czym dodanie go dla zmiennej jakoœciowej oznacza dodanie efektu losowego dla ka¿dego poziomu tej zmiennej. Ze wzglêdu na fakt, ¿e nie umiemy a priori stwierdziæ, które nachylenia powinny byæ losowe musimy dojœæ do tego metod¹ prób i b³êdów. Dla zmiennych jakoœciowych istotnie komplikuje to model, wiêc ograniczymy siê do trzech zmiennych ci¹g³ych `edu_resources`, `wealth` oraz `father_edu_num`.
+
+Poni¿ej prezentujemy wykresy zale¿noœci liniowych miêdzy resztami modelu wyjœciowego a ka¿d¹ ze zmiennych ci¹g³ych dla 25 wylosowanych szkó³.
+
+```{r, cache = FALSE}
+set.seed(2017)
+index <- probka$school_id %in% sample(levels(probka$school_id), size = 25)
+data <- probka[index, ]; data$school_id <- droplevels(data$school_id)
+data$residuals <- residuals(modelRanSchool)[index]
+ggplot(data, aes(x = edu_resources, y = residuals)) + geom_smooth(method = "lm") + facet_wrap( ~school_id) + ggtitle("Zale¿noœæ miêdzy resztami modelu a edu_resources")
+ggplot(data, aes(x = wealth, y = residuals)) + geom_smooth(method = "lm") + facet_wrap( ~school_id) + ggtitle("Zale¿noœæ miêdzy resztami modelu a wealth")
+ggplot(data, aes(x = father_edu_num, y = residuals)) + geom_smooth(method = "lm") + facet_wrap( ~school_id) + ggtitle("Zale¿noœæ miêdzy resztami modelu a wealth"); rm(data, index)
+```
+
+Jak widaæ nachylenia prostych regresji nie tylko wyraŸnie ró¿ni¹ siê miêdzy szko³ami, ale równie¿ maj¹ ró¿ne znaki, a wiêc uwzglêdnienie losowego wspó³czynnika nachylenia wydaje siê uzasadnione. Poni¿ej robimy to kolejno dla ka¿dej z trzech zmiennych.
+
+```{r school_random_slopes}
+fixed_formula <- "time.bc ~ score*(task + edu_resources + no_of_books + wealth + book_id + father_edu_num + father_edu_na) + mother_edu + female + country"
+losowy <- "school_id"
+for(i in c("edu_resources", "wealth", "father_edu_num")){
+  model <- lmer(as.formula(paste(c(fixed_formula, paste0("(1 | ", paste0(losowy, ")")), "(-1", paste0(paste0(i, " | "), paste0(losowy, " )"))), collapse = " + ")), data = probka, REML = FALSE)
+  print(paste(c("Test istotnoœci losowego nachylenia", i, "ze wzglêdu na szko³ê"), collapse = " "))
+  print(as.data.frame(anova(model, modelRanSchool, refit = FALSE)))
+}
+```
+
+Niezale¿nie od zmiennej, dla której je dodamy, losowe nachylenie jest istotne w modelu wed³ug testu ilorazu wiarygodnoœci i znacznie obni¿a wartoœci obu kryteriów informacyjnych. Obni¿ka ta jest najwy¿sza w przypadku zmiennej `wealth`. Poni¿ej sprawdzamy czy uwzglêdnienie losowego nachylenia zarówno dla `wealth` jak i dla jednej z pozosta³ych zmiennych poprawia nasz model:
+
+```{r school_random_slopes2}
+rm(list = ls()); load("Projekt_probka.rda")
+model <- lmer(time.bc ~ score*(task + edu_resources + no_of_books + wealth + book_id + father_edu_num + father_edu_na) + mother_edu + female + country + (1 + wealth | school_id), data = probka, REML = FALSE)
+model1 <- lmer(time.bc ~ score*(task + edu_resources + no_of_books + wealth + book_id + father_edu_num + father_edu_na) + mother_edu + female + country + (1 + wealth + edu_resources | school_id), data = probka, REML = FALSE)
+as.data.frame(anova(model1, model, refit = FALSE))
+model1 <- lmer(time.bc ~ score*(task + edu_resources + no_of_books + wealth + book_id + father_edu_num + father_edu_na) + mother_edu + female + country + (1 + wealth + father_edu_num | school_id), data = probka, REML = FALSE)
+as.data.frame(anova(model1, model, refit = FALSE)); rm(model, model1)
+```
+
+Na podstawie powy¿szych tabelek stwierdzamy, ¿e choæ ka¿dy dodany wspó³czynnik nachylenia jest istotny statystycznie, to przy dodaniu go dla `edu_resources` bardziej poprawiamy kryteria informacyjne ni¿ dla `father_edu_num` (oprócz tego w drugim przypadku model okaza³ siê prawie nieidentyfikowalny), natomiast uwzglêdnienie obu losowych nachyleñ (oprócz `wealth`) by³oby przesadn¹ komplikacj¹ przy niewielkiej poprawie jakoœci modelu.
+
+## Efekt losowy ucznia
+
+Podobnie jak w przypadku szko³y domyœlamy siê, ¿e wystêpuje pewien "efekt ucznia" -- niektórzy uczniowie mog¹ byæ wyj¹tkowi pod wzglêdem szybkoœci rozwi¹zywania zadañ, np. wyj¹tkowo szybko czytaj¹ polecenia. Z tego wzglêdu rozwa¿ymy losowe wyrazy wolne i wspó³czynniki nachylenia ze wzglêdu na uczniów w taki sam sposób, jak robiliœmy to dla szkó³, przy czym zaczynamy znowu od modelu wyjœciowego `modelBase`, a wyniki porównamy z wynikami dla efektów losowych szko³y w punkcie 3.3.
+
+### Losowy wyraz wolny
+
+Podobnie jak dla szkó³, poni¿ej przedstawiamy rozk³ad œrednich reszt modelu w grupach ze wzglêdu na uczniów. Jest on podobny do normalnego, choæ wyraŸnie niesymetryczny. Mimo to, spróbujemy w³¹czyæ losowy wyraz wolny dla uczniów, zak³adaj¹c jego normalnoœæ.
+
+```{r}
+load("Etap7_modelBase.rda")
+ggplot(aggregate(residuals ~ student_id, data.frame(residuals = residuals(modelBase), student_id = probka$student_id), mean), aes(x = residuals)) + geom_histogram(binwidth = 0.03, color = "black", fill = "white") + ggtitle("Rozk³ad œrednich reszt modelu wyjœciowego wœród uczniów")
+```
+
+Poni¿ej weryfikujemy istotnoœæ efektu losowego -- widaæ, ¿e jest istotny i poprawia oba kryteria informacyjne znacznie bardziej ni¿ uwzglednienie analogicznego efektu dla szko³y. Jest to prawdopodobnie spowodowane znacznie wiêksz¹ liczb¹ uczniów ni¿ szkó³, zatem uwzglêdniaj¹c zró¿nicowanie uczniów mo¿emy objaœniæ wiêcej zmiennoœci przy tej samej liczbie parametrów.
+
+```{r student_random_intercept, cache = FALSE}
+# modelRanStudent <- lmer(time.bc ~ score*(task + edu_resources + no_of_books + wealth + book_id + father_edu_num + father_edu_na) + mother_edu + female + country + (1 | student_id), data = probka, REML = FALSE)
+# save(modelRanStudent, file = "Etap7_modelRanStudent.rda")
+load("Etap7_modelRanStudent.rda")
+as.data.frame(anova(modelRanStudent, modelBase)); rm(modelBase)
+```
+
+### Losowy wspó³czynnik nachylenia
+
+Teraz rozwa¿amy losowe wspó³czynniki nachylenia zmiennych `edu_resources`, `wealth` i `father_edu_num`. Nale¿y pamiêtaæ, ¿e wszystkie te zmienne przyjmuj¹ jedn¹ wartoœæ dla ka¿dego ucznia, wiêc losowe nachylenie ma w tym przypadku znacznie mniej sensu ni¿ dla szkó³.
+
+```{r student_random_slopes}
+fixed_formula <- "time.bc ~ score*(task + edu_resources + no_of_books + wealth + book_id + father_edu_num + father_edu_na) + mother_edu + female + country"
+losowy <- "student_id"
+for(i in c("edu_resources", "wealth", "father_edu_num")){
+  model <- lmer(as.formula(paste(c(fixed_formula, paste0("(1 | ", paste0(losowy, ")")), "(-1", paste0(paste0(i, " | "), paste0(losowy, " )"))), collapse = " + ")), data = probka, REML = FALSE)
+  print(paste(c("Test istotnoœci losowego nachylenia", i, "ze wzglêdu na ucznia"), collapse = " "))
+  print(as.data.frame(anova(model, modelRanStudent, refit = FALSE)))
+}
+```
+
+Zgodnie z oczekiwaniami nie obserwujemy znacznej poprawy kryteriów informacyjnych po dodaniu losowych wspó³czynników nachylenia.
+
+## Efekt losowy ucznia zagnie¿d¿onego w szkole
+
+Do tej pory stwierdziliœmy, ¿e zarówno model z efektem losowym dla szko³y jak i ten z efektem losowym dla ucznia jest lepszy ni¿ wyjœciowy, przy czym drugi z nich jest lepszy od pierwszego. Teraz rozwa¿ymy dodanie obu efektów losowych, co w tym przypadku prowadzi do powstania hierarchicznego modelu mieszanego ze wzglêdu na zagnie¿d¿enie uczniów w szko³ach.
+
+```{r both_random_intercept, cache = FALSE}
+rm(list = ls())
+# modelRanBothNested <- lmer(time.bc ~ score*(task + edu_resources + no_of_books + wealth + book_id + father_edu_num + father_edu_na) + mother_edu + female + country + (1 | school_id/student_id), data = probka, REML = FALSE)
+# save(modelRanBothNested, file = "Etap7_modelRanBothNested.rda")
+load("Etap7_modelRanBothNested.rda"); load("Etap7_modelRanSchool.rda")
+as.data.frame(anova(modelRanBothNested, modelRanSchool))
+```
+
+Powy¿szy test ilorazu wiarygodnoœci wskazuje na istotnoœæ dodatkowego efektu losowego. W nastêpnym kroku dodajemy do otrzymanego modelu losowe wspó³czynniki nachylenia dla zmiennych `wealth`i `edu_resources`, które wybraliœmy w punkcie 3.1.2, przy czym tym razem pozwalamy na niezerow¹ korelacjê miêdzy efektami losowymi.
+
+```{r both_random_slopes, cache = FALSE}
+rm(modelRanSchool)
+# modelRanBothNestedPlus <- lmer(time.bc ~ score*(task + edu_resources + no_of_books + wealth + book_id + father_edu_num + father_edu_na) + mother_edu + female + country + (1 + wealth + edu_resources | school_id/student_id), data = probka, REML = FALSE)
+# save(modelRanBothNestedPlus, file = "Etap7_modelRanBothNestedPlus.rda")
+load("Etap7_modelRanBothNestedPlus.rda")
+as.data.frame(anova(modelRanBothNestedPlus, modelRanBothNested))
+rm(modelRanBothNestedPlus, modelRanBothNested)
+```
+
+# Wybrany model
+
+## Estymacja
+
+Po uwzglêdnieniu efektu losowego kwestionariusza omówionego w punkcie 2.2.4 otrzymujemy nastêpuj¹cy model:
+
+```{r chosen_model, cache = FALSE}
+# modelChosen <- lmer(time.bc ~ score*(task + edu_resources + no_of_books + wealth + father_edu_num + father_edu_na) + mother_edu + female + country + (1 + score | book_id) + (1 + wealth + edu_resources | school_id/student_id), data = probka, REML = FALSE)
+# save(modelChosen, file = "Etap7_modelChosen.rda")
+# load("Etap7_modelChosen.rda")
+```
+
+Niestety oszacowanie parametrów powy¿szego modelu nie uda³o siê -- algorytm nie osi¹gn¹³ zbie¿noœci. Z tego wzglêdu usuwamy z modelu element, który podczas selekcji przyniós³ najmniejsz¹ poprawê kryteriów informacyjnych czyli losowe nachylenie dla `edu_resources`. W ten sposób otrzymujemy nastêpuj¹cy model, który porównujemy z modelem wyjœciowym po zamianie efektu `book_id` ze sta³ego na losowy:
+
+```{r, cache = FALSE}
+# modelChosen2 <- lmer(time.bc ~ score*(task + edu_resources + no_of_books + wealth + father_edu_num + father_edu_na) + mother_edu + female + country + (1 + score | book_id) + (1 + wealth | school_id/student_id), data = probka, REML = FALSE)
+# save(modelChosen2, file = "Etap7_modelChosen2.rda")
+load("Etap7_modelRanBook.rda"); load("Etap7_modelChosen2.rda")
+as.data.frame(anova(modelChosen2, modelRanBook))
+```
+
+Jak widaæ dodanie losowego wyrazu wolnego i nachylenia `wealth` w zale¿noœci od ucznia zagnie¿d¿onego w szkole wyraŸnie poprawi³o jakoœæ naszego modelu (ale te¿ wielokrotnie wyd³u¿y³o czas estymacji).
+
+## Wizualizacja oszacowañ
+
+W celu wizualizacji otrzymanych oszacowañ szacujemy parametry naszego modelu ponownie, tym razem metod¹ REML, domyœln¹ dla takich modeli. Ze wzglêdu na wystêpuj¹ce w modelu liczne interakcje efektów sta³ych ze zmienn¹ `score` tworzymy funkcjê `coefs_score()`, która dla wspó³czynników modelu zwraca te wspó³czynniki skorygowane o wspó³czynnik dla odpowiedniego poziomu `score`.
+
+```{r, cache = FALSE}
+# modelChosen2 <- lmer(time.bc ~ score*(task + edu_resources + no_of_books + wealth + father_edu_num + father_edu_na) + mother_edu + female + country + (1 + score | book_id) + (1 + wealth | school_id/student_id), data = probka)
+# save(modelChosen2, file = "Etap7_modelChosen2_REML.rda")
+rm(list = ls()); load("Projekt_probka.rda")
+load("Etap7_modelChosen2_REML.rda")
+coefs_score <- function(x){
+  coefs <- data.frame(beta = x, variable = gsub("score.+:", "", names(x)), score = "No credit")
+  coefs$score <- as.character(coefs$score)
+  coefs$score[grep("score.+:", rownames(coefs))] <- rownames(coefs)[grep("score.+:", rownames(coefs))]
+  coefs$score <- gsub("score", "", coefs$score)
+  coefs$score <- gsub(":.+", "", coefs$score)
+  coefs$score[c(1:3, grep("country", rownames(coefs)), grep("female", rownames(coefs)), grep("mother_edu", rownames(coefs)))] <- NA
+  rownames(coefs) <- NULL
+  coefs$score <- factor(coefs$score, levels = c("-1", "No credit", "Full credit"))
+  coefs$beta_score <- NA
+  coefs[grep("-1", as.character(coefs$score)), "beta_score"] <- coefs$beta[grep("-1", as.character(coefs$score))] + coefs$beta[2]
+  coefs[grep("Full credit", as.character(coefs$score)), "beta_score"] <- coefs$beta[grep("Full credit", as.character(coefs$score))] + coefs$beta[3]
+  coefs[grep("No credit", as.character(coefs$score)), "beta_score"] <- coefs$beta[grep("No credit", as.character(coefs$score))]
+  coefs$variable <- as.character(coefs$variable)
+  return(coefs)
+}
+coefs <- coefs_score(fixef(modelChosen2))
+```
+
+Spoœród oszacowañ efektów sta³ych naszego modelu interesuj¹ce wydaj¹ siê parametry dla poszczególnych krajów (Polska jest tu poziomem bazowym):
+
+```{r, fig.width = 8, fig.height = 12}
+df <- coefs[grep("country", coefs$variable), ]
+df$variable <- gsub("country", "", df$variable)
+df$variable <- factor(df$variable, levels = df[order(df$beta), "variable"])
+ggplot(df, aes(y = beta, x = variable)) + geom_bar(stat = "identity") +  ggtitle("Oszacowania efektów sta³ych dla kraju") + coord_flip()
+```
+
+Ponadto, zale¿noœæ czasu rozwi¹zywania zadañ od liczby ksi¹¿ek wyraŸnie zale¿y od punktacji zadania:
+
+```{r, fig.width = 8, fig.height = 7}
+df <- coefs[c(2:3, grep("no_of_books", coefs$variable)), ]; df$beta_score[1:2] <- df$beta[1:2]
+df$score[1:2] <- c("-1", "Full credit"); df$variable[1:2] <- paste0("no_of_books", "0-10")
+df$variable <- factor(df$variable, levels = paste0("no_of_books", c("-1", levels(probka$no_of_books)[-2])))
+ggplot(df, aes(y = beta_score, x = variable)) + geom_bar(stat = "identity") + facet_wrap(~ score) + theme(axis.text.x=element_text(angle = 45, hjust = 1)) + ggtitle("Oszacowania efektów sta³ych dla liczby ksi¹¿ek")
+```
+
+Na powy¿szym wykresie widaæ, ¿e wp³yw kolejnych kategorii liczby ksi¹¿ek na czas rozwi¹zywania zmienia siê monotonicznie, przy czym: jest coraz wiêkszy (coraz mniej ujemny) dla osób, dla których nie ma informacji o wyniku zadania -- dla tych osób im wiêcej ksi¹¿ek w domu, tym d³u¿szy czas rozwi¹zywania zadania. Dla osób, które dobrze rozwi¹za³y zadanie jest odwrotnie -- im wiêcej ksi¹¿ek w domu, tym szybciej rozwi¹zuj¹ one zadanie. Z kolei dla osób, które nie dosta³y punktów za zadanie wp³yw liczby ksi¹¿ek na czas rozwi¹zywania jest bliski zera. Co ciekawe, monotonicznoœæ efektów kolejnych kategorii nie jest zachowana przez kategoriê wskazuj¹c¹ na ponad 500 ksi¹¿ek w domu, co sugeruje, ¿e osoby zaznaczaj¹ce tê kategoriê w pewien sposób ró¿ni¹ siê od pozosta³ych, byæ mo¿e stanowi¹ po prostu bardziej zró¿nicowan¹ grupê ni¿ pozosta³e.
+
+Komponenty losowe naszego modelu s¹ nastêpuj¹ce:
+
+```{r}
+summary(modelChosen2)$varcor
+```
+
+Jak widaæ najwy¿sz¹ wariancjê wœród efektów losowych ma wyraz wolny dla ucznia -- wariancja wyrazu wolnego dla szko³y jest ponad dwukrotnie mniejsza, co oznacza, ¿e zró¿nicowanie miêdzy uczniami przyczynia siê do du¿ej zmiennoœci naszej zmiennej. Losowy wyraz wolny dla szkó³ ma nawet mniejsz¹ wariancjê od losowego wyrazu wolnego dla kwestionariusza, co oznacza, ¿e zró¿nicowanie jest równie¿ znacz¹ce miêdzy poszczególnymi kwestionariuszami.
+
+## Testy permutacyjne
+
+Poni¿ej wykonujemy testy permutacyjne istotnoœci efektów losowych szko³y i ucznia w celu uzupe³nienia dotychczasowych wyników. Ze wzglêdu na doœæ skomplikowan¹ strukturê naszych efektów losowych i wystêpowanie zarówno losowych wyrazów wolnych jak i potencjalnie niezerowych korelacji miêdzy nimi, testowanie wykonamy na trochê prostszym modelu, w którym jedynymi efektami losowymi szko³y i ucznia s¹ losowe wyrazy wolne.
+
+### Test efektu ucznia
+
+Najpierw testujemy isotnoœæ losowego efektu ucznia, przy czym przy permutacji wartoœci tej zmiennej musimy pamiêtaæ o strukturze hierarchicznej naszego modelu. Wykonujemy 19 replikacji testu, co razem z oszacowaniem bez permutacji daje 20 obserwacji i oszacowana wariancja z tego ostatniego bêdzie najwiêksza, to przy poziomie istotnoœci 0.05 mo¿emy odrzuciæ hipotezê zerow¹ o nieistotnoœci efektu losowego ucznia.
+
+```{r, eval = FALSE}
+rm(list = ls()); load("Projekt_probka.rda")
+modelTesting <- lmer(time.bc ~ score*(task + edu_resources + no_of_books + wealth + father_edu_num + father_edu_na) + mother_edu + female + country + (1 + score | book_id) + (1 | school_id) + (1 | school_id:student_id), data = probka)
+save(modelTesting, file = "Etap7_modelTesting.rda")
+data <- probka
+wynik <- replicate(19, {
+    probka[, c("school_id_perm", "student_id_perm")] <- probka[sample(1:nrow(probka)), c("school_id", "student_id")]
+    model <- lmer(time.bc ~ score*(task + edu_resources + no_of_books + wealth + father_edu_num + father_edu_na) + mother_edu + female + country + (1 + score | book_id) + (1 | school_id) + (1 | school_id_perm:student_id_perm), data = probka)
+    as.data.frame(summary(model)$varcor)[1, 4]
+})
+save(wynik, file = "Etap7_test_efektu_studenta.rda")
+```
+
+Poni¿ej sprawdzamy, czy maksymalna wariancja losowego wyrazu wolnego po permutacji uczniów zagnie¿d¿onych w szko³ach jest ni¿sza od tej¿e wariancji w naszym modelu (bez permutacji):
+
+```{r}
+load("Etap7_test_efektu_studenta.rda"); load("Etap7_modelTesting.rda")
+max(wynik) < as.data.frame(summary(modelTesting)$varcor)[1, 4]
+```
+
+Widaæ, ¿e przy poziomie istotnoœci 0.05 nasz efekt losowy jest istotny. Co wiêcej, jego wariancja w modelu wynios³a `r as.data.frame(summary(modelTesting)$varcor)[1, 4]` czyli kilkakrotnie wiêcej ni¿ ta wariancja po permutacji `r max(wynik)`, a wiêc mimo ma³ej liczby replikacji, mo¿emy spokojnie stwierdziæ, ¿e efekt losowy ucznia jest istotny.
+
+### Test efektu szko³y
+
+Podobn¹ procedurê przeprowadzamy dla efektu losowego szko³y:
+
+```{r, eval = FALSE}
+wynik <- replicate(19, {
+    probka[, "school_id_perm"] <- probka[sample(1:nrow(probka)), "school_id"]
+  model <- lmer(time.bc ~ score*(task + edu_resources + no_of_books + wealth + father_edu_num + father_edu_na) + mother_edu + female + country + (1 + score | book_id) + (1 | school_id_perm) + (1 | school_id:student_id), data = probka)
+    as.data.frame(summary(model)$varcor)[2, 4]
+})
+save(wynik, file = "Etap7_test_efektu_szkoly.rda")
+```
+
+Porównujemy maksymaln¹ wariancjê efektu po permutacji do wariancji w naszym modelu:
+
+```{r}
+load("Etap7_test_efektu_szkoly.rda")
+max(wynik) < as.data.frame(summary(modelTesting)$varcor)[2, 4]
+```
+
+Podobnie jak w przypadku efektu ucznia stwierdzamy, ¿e efekt szko³y jest istotny. Jego wariancja, `r as.data.frame(summary(modelTesting)$varcor)[2, 4]` jest mniej wiêcej piêæ razy mniejsza od wariancji efektu ucznia, ale równie¿ kilkakrotnie wiêksza od maksymalnej wariancji efektu szko³y po permutacji tej zmiennej, `r max(wynik)`, co utwierdza nas w przekonaniu o istotnoœci tego efektu.
