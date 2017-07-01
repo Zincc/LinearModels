@@ -1,0 +1,101 @@
+---
+title: "Projekt - etap III"
+author: "Agata Gruszczyńska, Zofia Nawalany, Michał‚ Karlicki"
+date: "17 maja 2017"
+output: html_document
+toc: yes
+---
+#Spis treści  
+[1.Cel](#1.Cel)  
+[2.Podsumowanie](#2.Podsumowanie etapu III)  
+[3.Analiza istotności wybranych cech ucznia](#3.Analiza istotności wybranych cech ucznia)  
+[4.Model uwzględniający cechy zadania i cechy ucznia](#4.Model uwzględniający cechy zadania i cechy ucznia)  
+[5.Wniosek](#5.Wniosek)  
+
+#1.Cel <a name="1.Cel"></a>
+Celem kolejnego etapu projektu jest uwzględnienie w modelu cech ucznia. Najpierw sprawdzimy wpływ wybranych cech na czas wykonania zadania, a następnie dodamy zmienne zweryfikowane na poprzednich etapach jako istotne i za pomocą kryterium BIC dokonamy selekcji zmiennych.
+
+Wybrane cechy ucznia, których istotność zbadamy to:
+ * kraj                        kraj pochodzenia ucznia  
+ * plec                        płeć ucznia  
+ * wyksztalcenie_M             ukończenie przez matkę ucznia uczelni wyższej  
+ * wyksztalcenie_O             ukończenie przez ojca ucznia uczelni wyższej  
+ * jezyk                       tożsamość języka używanego przez ucznia na co dzień z językiem w jakim napisany był test  
+ * czytanieCzasopismNaukowych  czytanie przez ucznia czasopism naukowych  
+
+#2.Podsumowanie  <a name="2.Podsumowanie"></a>
+Na podstwie regresji krokowej minimalizującej parametr BIC wybrano model - "(lm(log(question_time)~(position/item)+jezyk+kraj+plec+wyksztalcenie_M+wyksztalcenie_O+czytanieCzasopismNaukowych", uwzględniający zagnieżdżenie zadania w pozycji oraz wszystkie wyżej wymienione cechy ucznia.
+
+```{r setup, echo=FALSE}
+library(foreign)
+#load("~/STUDIA/BioinformatykaUW/sem2_Bioinf/Biecek/Projekt R/etap III/data2.Rda")
+#load("~/STUDIA/BioinformatykaUW/sem2_Bioinf/Biecek/Projekt R/modele_liniowe-master/data.Rda")
+load("/Users/michalkarlicki/modele_liniowe/data.Rda")
+load("/Users/michalkarlicki/data2.Rda")
+rozwazane_zmienne<-cbind.data.frame(atsm3$CNTSTUID, atsm3$CNT, atsm3$ST004D01T, atsm3$ST006Q01TA, atsm3$ST008Q01TA, atsm3$ST022Q01TA, atsm3$ST146Q04TA)
+
+colnames(rozwazane_zmienne)<-c('CNTSTUID','kraj','plec', 'wyksztalcenie_M', 'wyksztalcenie_O', 'jezyk', 'czytanieCzasopismNaukowych')
+
+dane<-merge(atsm2,rozwazane_zmienne, by="CNTSTUID")
+dane<- subset(dane, select=-subject)
+#j<-c((unique(as.character(dane$jezyk))))
+dane2<-as.matrix(gsub("No Response", "0", dane$jezyk))
+dane2[][is.na(dane2[])] <- 0
+dane$jezyk<-dane2
+#M<-c((unique(as.character(dane$wyksztalcenie_M))))
+dane3<-as.matrix(gsub("No Response", "0", dane$wyksztalcenie_M))
+dane3[][is.na(dane3[])] <- 0
+dane$wyksztalcenie_M<-dane3
+#O<-c((unique(dane$wyksztalcenie_O)))
+dane4<-as.matrix(gsub("No Response", "0", dane$wyksztalcenie_O))
+dane4[][is.na(dane4[])] <- 0
+dane$wyksztalcenie_O<-dane4
+#p<-c((unique(as.character(dane$plec))))
+#k<-c((unique(as.character(dane$kraj))))
+```
+#3.Analiza istotności wybranych cech ucznia <a name="3.Analiza istotności wybranych cech ucznia"></a>
+
+```{r}
+model_1<-(lm(log(question_time)~kraj, data=dane))
+anova(model_1)
+model_2<-(lm(log(question_time)~plec, data=dane))
+anova(model_2)
+model_3<-(lm(log(question_time)~wyksztalcenie_M, data=dane))
+anova(model_3)
+model_4<-(lm(log(question_time)~wyksztalcenie_O, data=dane))
+anova(model_4)
+model_5<-(lm(log(question_time)~jezyk, data=dane))
+anova(model_5)
+model_6<-(lm(log(question_time)~czytanieCzasopismNaukowych, data=dane))
+anova(model_6)
+```
+Wyniki jednokierunkowej analizy wariancji wskazują że wszystkie wybrane cechy ucznia istotnie wpływają na czas wykonania zadania.
+
+```{r}
+model_7<-(lm(log(question_time)~jezyk+kraj+plec+wyksztalcenie_M+wyksztalcenie_O+czytanieCzasopismNaukowych, data=dane))
+anova(model_7)
+```
+Analiza wielokierunkowa także wskazuje na istotność wszystkich zmiennych. Na podstawie wartośći sumy kwadratów można zauważyć, że najsilniej na czas rozwiązywania działań wpływają zmienne kraj oraz język. 
+
+#4.Model uwzględniający cechy zadania i cechy ucznia <a name="4.Model uwzględniający cechy zadania i cechy ucznia"> </a>
+Na tym etapie budujemy model uwzględniający zagnieżdżenie zadania w pozycji oraz wszystkie wyznaczone jako istotne cechy ucznia. 
+```{r echo=TRUE}
+model<-(lm(log(question_time)~(position/item)+jezyk+kraj+plec+wyksztalcenie_M+wyksztalcenie_O+czytanieCzasopismNaukowych, data=dane))
+```
+Następnie sprawdzamy czy możemy zredukować liczby zmiennych w modelu, używając regresji krokowej opartej na kryterium BIC.
+```{r echo}
+summary(model<-(lm(log(question_time)~(position/item)+jezyk+kraj+plec+wyksztalcenie_M+wyksztalcenie_O+czytanieCzasopismNaukowych, data=dane)))
+```
+
+``` {r}
+smodel<-step(model, k=log(467558))
+```
+```{r}
+summary(smodel)
+```
+#5.Wniosek  <a name="5.Wniosek"></a>
+Metoda ta potwierdza że wszystkie uwzględnione zmienne są istotne, a usunięcie którejś z nich skutkuje spadkiem jakości modelu, w związku z czym zostaje on wybrany jako model, którego diagnostykę wykonamy na następnym etapie.
+
+```{r pressure, echo=FALSE}
+```
+

@@ -1,0 +1,298 @@
+---
+title: "Projekt modele liniowe i mieszane"
+subtitle: "Zadanie VII"
+author: "Aleksandra D¹browska, Jan Dmitruk, Magda M³ynarczyk"
+date: "20 czerwca 2017"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: true
+
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning = FALSE)
+setwd("C:/Users/ollda_000/Downloads")
+```
+
+```{r libraries}
+library(lme4)
+library(ggplot2)
+library(knitr)
+library(dplyr)
+library(lattice)
+library(ggthemes)
+library(e1071)
+load("dane_nowe.rda")
+```
+
+#Przedstawienie problemu 
+W kolejnej fazie chcemy przedstawiæ model mieszany oparty na cechach zadania i ucznia z poprawnie wskazanymi efektami losowymi/sta³ymi.
+
+#Podsumowanie 
+Koñcowy model zosta³ uzupe³niony o zmienne dotycz¹ce numeru szko³y i numerze identyfikacyjnym ucznia. Zmienne te zosta³y zakwalifikowane jako efekty losowe. Czêœæ zmiennych z poprzednich modeli zosta³a w tym etapie uznana za efekty losowe: `id_kwestionariusza` oraz `id_kraju` [4.1](#4.1). 
+Ostateczny model zawiera wszytstkie wy¿ej wymienione zmienne, rozpatrujemy w nim zagnie¿d¿enie zmiennych `id_szkoly` i `id_ucznia` [4.2.3](#4.2.3). Przeprowadziliœmy testy ilorazu wiarogodnoœci dla wy¿ej wymienionych zmiennych - dodanie ka¿dej jako efekt losowy zosta³o uznane za istotne [5.1](#5.1). Na koniec zbadaliœmy rozk³ady efektów losowych oraz szumu [6](#6).
+
+#Model z efektami sta³ymi
+Bêdziemy bazowaæ na poprzednio zbudowanym modelu.
+
+```{r}
+model <- lm(log(czas_zadania +45)~zadanie*pozycja_zadania+id_kwestionariusza+mies_ur+id_kraju*plec+wyk_m_lsd*wyk_o_lsd+gr_zawod_m+gr_zawod_o+stat_m+stat_o, data = dane_nowe)
+
+BIC(model)
+```
+
+#Model z efektami losowymi
+
+##Poprzednie zmienne <a name = "4.1"></a>
+W tym akapicie rozwa¿ymy które zmienne u¿ywane do budowy poprzedniego modelu, mo¿emy uznaæ za efekty losowe. 
+Mamy nastêpuj¹ce zmienne: `zadanie`, `pozycja_zadania`, 
+`mies_ur`, `plec`, `wyk_o`, `wyk_m`, `gr_zawod_m`, `gr_zawod_o`, `stat_m`, `stat_o`.
+
+Zmiennych zwi¹zanych z wykszta³ceniem rodziców czy grupach zawodowych nie bêdziemy rozwa¿aæ w kategorii efektów losowych, poniewa¿ wszystkie poziomy tych zmiennych znajduj¹ siê w naszych danych i nie ma ich stosunkowo du¿o.
+Tak samo, ze zmiennymi okreœlaj¹cymi miesi¹c urodzenia i p³eæ.
+
+W porównaniu z orginalnymi danymi mamy o 5 poziomów mniej mówi¹cych o numerze zadania oraz 28 poziomów mniej dla zmiennej `id_kwestionariusza`.
+
+
+###Efekt losowy kwestionariusza <a name = "4.1.1"></a>
+
+Najpierw sprawdzamy czy uwzglêdnienie zmiennej `id_kwestionariusza` jako efekt losowy poprawia nam jakoœæ modelu. 
+
+```{r}
+sr_czas <- dane_nowe %>% group_by(id_kwestionariusza) %>% summarize(sr_czas=mean(czas_zadania))
+dane_nowe <- left_join(dane_nowe,sr_czas, by="id_kwestionariusza")
+
+ggplot(dane_nowe, aes(id_kwestionariusza, czas_zadania))+geom_tufteboxplot(median.type = NULL)+stat_summary(fun.x=sr_czas$sr_czas, colour="darkred", geom="point", size=3)
+
+
+```
+
+```{r}
+model_kwestionariusz_staly <- lm(log(czas_zadania +45)~zadanie*pozycja_zadania+id_kwestionariusza+mies_ur+id_kraju*plec+wyk_m_lsd*wyk_o_lsd+gr_zawod_m+gr_zawod_o+stat_m+stat_o, data = dane_nowe)
+
+```
+
+```{r}
+model_kwestionariusz_mieszany <- lmer(log(czas_zadania +45)~zadanie*pozycja_zadania+(1|id_kwestionariusza)+mies_ur+id_kraju*plec+wyk_m_lsd*wyk_o_lsd+gr_zawod_m+gr_zawod_o+stat_m+stat_o, data = dane_nowe, REML=F)
+
+
+```
+
+```{r}
+df <- c(model_kwestionariusz_staly=BIC(model_kwestionariusz_staly),model_kwestionariusz_losowy=BIC(model_kwestionariusz_mieszany))
+df
+```
+
+Jak widzimy, u¿ycie zmiennej `id_kwestionariusza` polepsza nam kryterium informacyjne BIC. Dlatego decydujemy siê wykorzystaæ t¹ zmienn¹ jako efekt losowy.
+
+
+
+###Efekt losowy kraju <a name = "4.1.2"></a>
+
+Podobnie, w naszych danych mamy tylko 5 krajów, wiêc podejrzewamy, ¿e lepiej by³oby uwzglêdniæ `id_kraju` jako zmienn¹ losow¹.
+
+```{r}
+sr_czas2 <- dane_nowe %>% group_by(id_kraju) %>% summarize(sr_czas2=mean(czas_zadania))
+dane_nowe <- left_join(dane_nowe,sr_czas2, by="id_kraju")
+
+ggplot(dane_nowe, aes(id_kraju, czas_zadania))+geom_tufteboxplot(median.type = NULL)+stat_summary(fun.x=sr_czas2$sr_czas2, colour="darkred", geom="point", size=3)
+
+```
+
+```{r}
+model_kraj_staly <- lm(log(czas_zadania +45)~zadanie*pozycja_zadania+id_kwestionariusza+mies_ur+id_kraju*plec+wyk_m_lsd*wyk_o_lsd+gr_zawod_m+gr_zawod_o+stat_m+stat_o, data = dane_nowe)
+
+```
+
+```{r}
+model_kraj_mieszany <- lmer(log(czas_zadania +45)~zadanie*pozycja_zadania+id_kwestionariusza+mies_ur+(1|id_kraju)*plec+wyk_m_lsd*wyk_o_lsd+gr_zawod_m+gr_zawod_o+stat_m+stat_o, data = dane_nowe, REML=F)
+
+```
+
+```{r}
+df <- c(model_kraj_staly=BIC(model_kraj_staly),model_kraj_losowy=BIC(model_kraj_mieszany))
+df
+```
+
+Podobnie jak dla zmiennej dotycz¹cej kwestionariusza, dodanie zmiennej `id_kraju` zmniejsza nam kryterium informacyjne.
+
+
+```{r}
+
+model_mieszany1 <- lmer(log(czas_zadania +45)~zadanie*pozycja_zadania+(1|id_kwestionariusza)+mies_ur+(1|id_kraju)*plec+wyk_m_lsd*wyk_o_lsd+gr_zawod_m+gr_zawod_o+stat_m+stat_o, data = dane_nowe, REML=F)
+
+```
+
+##Nowe zmienne <a name = "4.2"></a>
+
+Oprócz zmiennych rozwa¿anych wczeœniej chcemy dodaæ do modelu zmienne, które automatycznie nasuwaj¹ siê na myœl gdy rozwa¿amy te dane. S¹ to `id_ucznia` i `id_szkoly`.
+
+
+### Efekt losowy szko³y <a name = "4.2.1"></a>
+
+Najpierw rozwa¿amy model z efektem losowym dla szko³y.
+```{r}
+model_szkola <- lmer(log(czas_zadania +45)~zadanie*pozycja_zadania+(1|id_kwestionariusza)+mies_ur+(1|id_kraju)*plec+wyk_m_lsd*wyk_o_lsd+gr_zawod_m+gr_zawod_o+stat_m+stat_o+(1|id_szkoly), data = dane_nowe, REML=F)
+
+BIC(model_szkola)
+```
+
+Widzimy, ¿e dodanie szko³y jako efekt losowy polepsza nam kryterium informacyjne.
+
+###Efekt losowy ucznia <a name = "4.2.2"></a>
+
+Model z efektem losowym ucznia.
+```{r}
+model_uczen <- lmer(log(czas_zadania +45)~zadanie*pozycja_zadania+(1|id_kwestionariusza)+mies_ur+(1|id_kraju)*plec+wyk_m_lsd*wyk_o_lsd+gr_zawod_m+gr_zawod_o+stat_m+stat_o+(1|id_szkoly)+(1|id_ucznia), data = dane_nowe, REML=F)
+
+BIC(model_uczen)
+```
+
+###Zagnie¿dzone zmienne <a name = "4.2.3"></a>
+Model z uczniem jako efektem zagnie¿dzonym w szkole.
+```{r}
+model_uczen_szkola <- lmer(log(czas_zadania +45)~zadanie*pozycja_zadania+(1|id_kwestionariusza)+mies_ur+(1|id_kraju)*plec+wyk_m_lsd*wyk_o_lsd+gr_zawod_m+gr_zawod_o+stat_m+stat_o+(1|id_szkoly/id_ucznia), data = dane_nowe, REML=F)
+
+BIC(model_uczen_szkola)
+```
+
+#Istotnoœæ zmiennych w modelu
+
+##Efekty losowe <a name = "5.1"></a>
+
+Ostateczny model ró¿ni siê od przedstawionego w poprzedniej fazie dwoma zmiennymi: `id_szkoly` i  `id_ucznia`. Zosta³y one uwzglêdnione jako efekty losowe. Zbadamy istotnoœæ wy¿ej wymienionych zmiennych oraz zmiennych u¿ywanych w poprzednim modelu, ale teraz zakwalifikowanych jako efekty losowe.
+Do oceny istotnoœci efektów u¿yjemy testu ilorazu wiarogodnoœci.
+
+* `id_kwestionariusza`
+
+```{r}
+
+model<- lm(log(czas_zadania +45)~zadanie*pozycja_zadania+mies_ur+id_kraju*plec+wyk_m_lsd*wyk_o_lsd+gr_zawod_m+gr_zawod_o+stat_m+stat_o, data = dane_nowe)
+x1 <- logLik(model)
+x2 <- logLik(model_kwestionariusz_mieszany)
+roznica <- as.numeric(x1-x2)
+
+##36 efektow dla kwestionariusza
+
+
+pchisq(-2*roznica,2302,lower.tail=FALSE)
+
+
+```
+
+Efekt losowy kwestionariusza istotny.
+
+* `id_kraju`
+
+```{r}
+model<- lm(log(czas_zadania +45)~zadanie*pozycja_zadania+id_kwestionariusza+mies_ur+plec+wyk_m_lsd*wyk_o_lsd+gr_zawod_m+gr_zawod_o+stat_m+stat_o, data = dane_nowe)
+x1 <- logLik(model)
+x2 <- logLik(model_kraj_mieszany)
+roznica <- as.numeric(x1-x2)
+
+##5 efektow dla kraju
+
+pchisq(-2*roznica,5,lower.tail=FALSE)
+```
+
+Zmienna `id_kraju` jako efekt losowy jest istotna.
+
+* `id_szkoly/id_ucznia`
+
+```{r}
+model <- lm(log(czas_zadania +45)~zadanie*pozycja_zadania+id_kwestionariusza+mies_ur+id_kraju*plec+wyk_m_lsd*wyk_o_lsd+gr_zawod_m+gr_zawod_o+stat_m+stat_o, data = dane_nowe)
+
+model_uczen_szkola2 <- lmer(log(czas_zadania +45)~zadanie*pozycja_zadania+id_kwestionariusza+mies_ur+id_kraju*plec+wyk_m_lsd*wyk_o_lsd+gr_zawod_m+gr_zawod_o+stat_m+stat_o+(1|id_szkoly/id_ucznia), data = dane_nowe, REML=F)
+
+x1 <- logLik(model)
+x2 <- logLik(model_uczen_szkola2)
+roznica <- as.numeric(x1-x2)
+
+##2302 efekty dla szkoly i zagniezdzonego w nim ucznia
+
+
+pchisq(-2*roznica,2302,lower.tail=FALSE)
+
+```
+Zmienna `id_szkoly` i zagnie¿dzona w niej zmienna `id_ucznia` te¿ zosta³a uznana za istotn¹.
+
+##Efekty sta³e <a name = "5.2"></a>
+
+Istotnoœæ efektów sta³ych badaliœmy we wczeœniejszych fazach i wszystkie zosta³y zawalifikowane jako istotne.
+
+#Analiza wspó³czynników. <a name = "6"></a>
+
+##Rozk³ad efektów mieszanych <a name = "6.1"></a>
+
+```{r}
+u <- ranef(model_uczen_szkola,condVar=TRUE)
+u_uczen_szkola <- data.frame(u$`id_ucznia:id_szkoly`$`(Intercept)`)
+colnames(u_uczen_szkola) <- "uczen_szkola"
+
+u_szkola <- data.frame(u$`id_szkoly`$`(Intercept)`)
+colnames(u_szkola) <- "szkola"
+```
+
+Sprawdzimy, czy rozk³ady efektów `id_szko³y` i `id_ucznia:id_szkoly`, poniewa¿ mamy dla nich wiele obserwacji, a tylko wtedy sensowne jest badanie rozk³adu zmiennej. 
+
+Dla modelu mieszanego chcemy aby wspó³czynniki `u` mia³y w przybli¿eniu rozk³ad normalny.
+
+Poni¿ej przedstawiamy histogramy dla wybranych zmiennych wraz z na³o¿onymi gêstoœciami rozk³adu normalnego z odpowiednimi parametrami wyznaczonymi z danych.
+
+```{r}
+
+ggplot(u_szkola, aes(szkola))+
+  geom_histogram(bins=70, fill="blue")+
+  theme_bw()+
+  theme(axis.title.x =element_blank() )
+
+```
+
+
+```{r}
+skewness(u_szkola$szkola)
+kurtosis(u_szkola$szkola)
+```
+Powy¿szy rozk³ad jest bardziej skoncentrowany wokó³ œredniej ni¿ rozk³ad normalny. Skoœnoœæ tak¿e odbiega od tej dla rozk³adu normalnego.
+
+
+```{r}
+ggplot(u_uczen_szkola, aes(uczen_szkola))+
+  geom_histogram(bins=70, fill="blue")+
+  theme_bw()+
+  theme(axis.title.x =element_blank() )
+  
+```
+
+```{r}
+skewness(u_uczen_szkola$uczen_szkola)
+kurtosis(u_uczen_szkola$uczen_szkola)
+```
+Kurtoza i skoœnoœæ maj¹ podobne wartoœci jak dla rozk³adu zmiennej `id_szkoly`.
+
+##Rozk³ad reszt modelu <a name = "6.2"></a>
+Tak jak w przypadku efektów mieszanych chcemy, aby b³êdy w modelu mia³y rozk³ad normalny.
+
+```{r}
+podsumowanie<- summary(model_uczen_szkola)
+epsilon <- podsumowanie$coefficient[,"Std. Error"]
+epsilon <- as.data.frame(epsilon)
+
+ggplot(epsilon, aes(epsilon))+
+  geom_histogram(bins=30, fill="blue")+
+  theme_bw()+
+  theme(axis.title.x =element_blank() )
+
+```
+
+
+```{r}
+skewness(epsilon$epsilon)
+kurtosis(epsilon$epsilon)
+```
+
+Jak widzimy powy¿szy rozk³ad nie przypomina normalnego. Œwiadcz¹ te¿ o tym wyliczone wartoœci: kurtoza i skoœnoœæ.
+

@@ -1,0 +1,162 @@
+---
+title: "Etap IV"
+author: "Zofia Nawalany, Agata Gruszczyńska, Michał Karlicki"
+date: "29 maja 2017"
+output: html_document
+---
+#Spis treści  
+[1.Cel](#1.Cel)  
+[2.Streszczenie etapu IV](#2.Streszczenie etapu IV)  
+[3.Testy](#3.Testy)  
+[4.Analiza reszt](#4.4.Analiza reszt)  
+[5.Wizualizacje](#5.Wizualizacja)  
+[6.Podsumowanie](#7.Wybór modelu)  
+
+
+#1.Cel <a name="1.Cel"></a>
+Celem drugiego etapu jest diagnostka i wizualizacja wybranego modelu, opisującego zależność między czasem całego zadania a wybranymi cechami zadania i ucznia.
+
+#2.Streszczenie etapu IV <a name="2.Streszczenie etapu IV"></a>
+Wybrane testy diagnostycze, Anova oraz testy post Hock jak i wizualizacji doprowadziły do wniosków przedstawionych poniżej:    
+ * Wszystkie wybrane zmienne wykazały dużą istotność dla modelu      
+ * Największy wpływ mają zmienne jezyk, kraj, pozycja      
+ * O wiele mniejszy wpływ na zmienną objaśnianą mają zmienne wykształcenie, czytanie czasopism oraz płeć      
+ * Średnio uczniowie u któych językiem mówionym był Chiński i Angielski szybciej rozwiązywało zadania niż z pozostałymi językami.     
+ * Średnio kraje których kolonizatorem były Hiszpania gorzej radzą sobie z testami w porównaniu z tymi których kolonizatorem była      Wielka Brytania     
+ * Według testów Post Hoc język Arabski grupuje się razem z Hiszpańskim, a w przypadku krajów można zauważyć pewne związki z położeniem geograficznym tzn. Nowa Zelandia grupuje się razem z Australią, a np. kraje należące do tzw. Ameryki Łacińskiej razem.        
+ * Wybrane test wykazały, że reszty nie są normalne   
+ * Wybrane testy wykazały, że model jest heteroskedastyczy    
+
+#3.Testy i wykresy diagnostyczne <a name="3.Testy"></a>
+
+```{r, echo=FALSE, warning=F, message=F}
+#load("/Users/michalkarlicki/Downloads/actionTimeScoreMath.rda")
+#load("/Users/michalkarlicki/modele_liniowe/data.Rda")
+#load("/Users/Gruszka/Documents/STUDIA/BioinformatykaUW/sem2_Bioinf/Biecek/Projekt R/actionTimeScoreMath.rda")
+#load("/Users/michalkarlicki/data2.Rda")
+load("../../data2.Rda")
+load("data.Rda")
+
+library(foreign)
+library(outliers)
+library(ggplot2)
+library(nortest)
+library(lmtest)
+library(broom)
+library(dplyr)
+library(agricolae)
+
+```
+#Wybrany model 
+```{r, echo=FALSE}
+rozwazane_zmienne<-cbind.data.frame(atsm3$CNTSTUID, atsm3$CNT, atsm3$ST004D01T, atsm3$ST006Q01TA, atsm3$ST008Q01TA, atsm3$LANGTEST_COG, atsm3$ST146Q04TA)
+
+colnames(rozwazane_zmienne)<-c('CNTSTUID','kraj','plec', 'wyksztalcenie_M', 'wyksztalcenie_O', 'jezyk', 'czytanieCzasopismNaukowych')
+
+dane<-merge(atsm2,rozwazane_zmienne, by="CNTSTUID")
+dane<- subset(dane, select=-subject)
+#j<-c((unique(as.character(dane$jezyk))))
+dane2<-as.matrix(gsub("No Response", "0", dane$jezyk))
+dane2[][is.na(dane2[])] <- 0
+dane$jezyk<-dane2
+#M<-c((unique(as.character(dane$wyksztalcenie_M))))
+dane3<-as.matrix(gsub("No Response", "0", dane$wyksztalcenie_M))
+dane3[][is.na(dane3[])] <- 0
+dane$wyksztalcenie_M<-dane3
+#O<-c((unique(dane$wyksztalcenie_O)))
+dane4<-as.matrix(gsub("No Response", "0", dane$wyksztalcenie_O))
+dane4[][is.na(dane4[])] <- 0
+dane$wyksztalcenie_O<-dane4
+```
+
+```{r}
+model<-(lm(log(question_time)~(position/item)+jezyk+kraj+plec+wyksztalcenie_M+wyksztalcenie_O+czytanieCzasopismNaukowych, data=dane))
+
+```
+#Badanie heteroskedastyczności
+Wybrany przez nas model jest heteroskedastyczny.
+```{r}
+bptest(model)
+```
+#Sprawdzenie jednorodności wariancji reszt:
+```{r}
+dwtest(model)
+bgtest(model)
+```
+
+#Anova
+Odchylenia wariancji są istotne dla wybranego modelu. 
+```{r}
+anova(model)
+```
+#Testy Posthock
+
+```{r}
+HSD.test(model, "position", console=TRUE)
+```
+Testy posthoc dla kraju pokazują, że część z nich grupuje się w sposób geograficzny (kraje położone blisko siebie zostały zakwalifikowane do jednej grupy) lub wg. kolonizatora.
+```{r}
+HSD.test(model, "kraj", console=TRUE)
+```
+Ilość języków jest dużo mniejsza niż liczba badanych krajów, co wiąże się z wpływem kolonizacji. Na podstawie testu posthcoc dla języków wynikło, że język arabski grupuje się razem z hiszpańskim. Może się to wiązać zarówno z geograficzną bliskością Hiszpanii z krajami arabskimi jak również splecioną historią tych krajów
+```{r}
+HSD.test(model, "jezyk", console=TRUE)
+```
+
+#4.Analiza reszt <a name="4.Analiza reszt"></a>
+Poniżej wykonane testy statystyczne na normalość reszt jednoznacznie wskazują na to, że reszty nie są normalne. 
+
+```{r, warning=F, warning=F, message=F}
+residuals <- rbind(data.frame(residuals = rstandard(model), typ = "Standard residuals"), data.frame(residuals = rstudent(model), typ = "Student's residuals"))
+
+ad.test(residuals$residuals[residuals$typ == "Standard residuals"])
+ad.test(residuals$residuals[residuals$typ == "Student's residuals"])
+
+ks.test(model$residuals, "pnorm")
+```
+#5.Wizualizacja modelu <a name="5.Wizualizacja"></a>
+
+Poniżej zostały przedstawione zależności wybranych istotnych zmiennych od czasu wykonywania zadań.    
+
+```{r}
+dane_wykres2 <- augment(model)
+g <- ggplot(dane_wykres2, aes(item, .fitted)) +geom_line() 
+g <- g + theme(legend.position="none", axis.text.x = element_text(angle = 90, hjust = 1))
+g
+```
+#Zależność pozycji zadania od czasu jego rozwiązywania
+Kropkami zaznaczone są średnie wartości na każdej z pozycji.
+```{r}
+ggplot(dane_wykres2, aes(position, log.question_time.)) + geom_boxplot()+
+stat_summary(fun.y=mean, geom="point")
+```
+#Zależność kraju pochodzenia ucznia, a czasem rozwiązywania zadań 
+```{r}
+ggplot(dane_wykres2, aes(kraj, log.question_time.)) + geom_boxplot()+
+stat_summary(fun.y=mean, geom="point") + theme(legend.position="none", axis.text.x = element_text(angle = 90, hjust = 1))
+```
+#Zależność języka którym posługuje się uczeń, a czasem rozwiązywania zadań
+```{r}
+ggplot(dane_wykres2, aes(jezyk, log.question_time.)) + geom_boxplot()+
+stat_summary(fun.y=mean, geom="point") + theme(legend.position="none", axis.text.x = element_text(angle = 90, hjust = 1))
+```
+#Zależność płci ucznia, a czasem rozwiązywania zadań
+```{r}
+ggplot(dane_wykres2, aes(plec, log.question_time.)) + geom_boxplot()+
+stat_summary(fun.y=mean, geom="point") 
+```
+
+#6.Podsumowanie <a name="7.Wybór modelu"></a>
+
+Analizując  model z etapu III ->lm(log(question_time)~(position/item)+jezyk+kraj+plec+wyksztalcenie_M+wyksztalcenie_O+czytanieCzasopismNaukowyc okazało się, że:   
+ * Wszystkie wybrane zmienne wykazały dużą istotność dla modelu   
+ * Największy wpływ mają zmienne jezyk, kraj, pozycja  
+ * O wiele mniejszy wpływ na zmienną objaśnianą mają zmienne wykształcenie, czytanie czasopism oraz płeć  
+ * Średnio uczniowie u któych językiem mówionym był Chiński i Angielski szybciej rozwiązywało zadania niż z pozostałymi językami.  
+ * Średnio kraje których kolonizatorem były Hiszpania gorzej radzą sobie z testami w porównaniu z tymi których kolonizatorem była      Wielka Brytania     
+ * Według testów Post Hoc język Arabski grupuje się razem z Hiszpańskim, a w przypadku krajów można zauważyć pewne związki z położeniem geograficznym tzn. Nowa Zelandia grupuje się razem z Australią, a np. kraje należące do tzw. Ameryki Łacińskiej razem.         
+ * Wybrane test wykazały, że reszty nie są normalne     
+ * Wybrane testy wykazały, że model jest heteroskedastyczy    
+  
+  Nie zostały przedstawione wykresy diagnostyczne, ponieważ ze względu na dużą ilość danych nie były one czytelne.    
+  
