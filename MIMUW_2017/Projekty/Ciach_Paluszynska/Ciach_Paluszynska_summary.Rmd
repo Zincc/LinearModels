@@ -1,0 +1,206 @@
+---
+title: "A study of the times of solving mathematical tasks"
+subtitle: "Based on the data from PISA 2015 test"
+date: '28 czerwca 2017'
+output: 
+    html_document:
+        toc: true
+        toc_depth: 3
+        toc_float: true
+        number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+We have analyzed the times of solving mathematical tasks based on data from the PISA 2015 test. The authors of the test provide data on numerous variables describing students, tasks, schools, etc. We have selected several variables which could have an interesting impact on the time of solving. From this subset, we have further chosen the variables which had the biggest impact, based on the techinques of model selection. We have then analyzed potential transformations of the data to account for non-normality of the solving time distribution and to try to reduce the dimentionality in the case of categorical variables. Finally, we have investigated the connection between the chosen variables and the solving time, and the interacions between variables. We did our best to interpret the obtained results and to draw conclusions regarding the time of solving the tasks.
+
+# The dataset
+
+From the variables provided by the authors of the PISA study, we have chosen the following subset:
+
+* The credit the student got for solving the task
+* The number of the task
+* The educational resources in the student's home
+* Number of books at student's home
+* Wealth of the student's parents
+* Number of the questionnaire
+* Education of the father
+* Education of the mother
+* Whether the student is female
+* Country in which the student took the test
+* Student's immigration status
+* Number of musical instruments at student's home
+* Whether the student's parents encourage her/him to be confident
+* Whether the students seems herself/himself as an ambitious person
+* How often the student came late to classes during two weeks before test
+
+# Data curation
+
+We have observed several atypical values of both dependent and independent variables. 
+
+A small proportion of solving times was extremely high, impossible to be observed in reality (reaching up to several hours). We have censored the solving time at 10 minutes, which was approximately the time that a student had to solve a single task.  
+
+The PISA 2015 edition provided data on regions of several countries, like Massachusets. We have discarded the observations that did not correspond to actual countries. 
+
+Some of the questionnaires were specific to some countries, like the UK or Quatar. We have discarded those questionnaires and kept only the ones which were solved in majority of the countries. 
+
+We have recoded the missing observations in dependent variables as a separate factor level. This is motivated by the fact that, for example, if a student did not answer the question about the education of his father, it might provide important information (possibly suggesting that the student has no father). 
+
+To reduce the computational complexity, we have chosen a sample from the data using the proportionate quota sampling with respect to schools in countries. Specifically, from each country we have randomly selected a proportion of `0.25` schools, and included only the solutions corresponding to those schools. We have observed that less dense sampling of schools does not properly represent the structure of soving times, which is caused by a low number of schools and high variance of solving times in some countries (e.g. Luxemburg). 
+
+# Basic model selection 
+
+From the chosen subset of variables, we have discarded the ones that had either insignificant or very low impact on the solving time. Firstly, we have chosen the model using the step strategy and the Bayesian Information Criterion. Secondly, we have manually removed the variables with low values of the F statistic. We have arrived at the following variables and their values:
+
+* score: The credit the student got for solving the task
+    + "Full credit"
+    + "Partial credit"
+    + "No credit"
+* task: The number of the task
+    + A factor with 44 levels
+* edu_resources: The educational resources in the student's home
+    + Numeric variable with range from -4.41 to 1.17
+* no_of_books: Number of books at student's home
+    + ">500"
+    + "201-500"
+    + "101-200"
+    + "26-100"
+    + "11-25"
+    + "0-10"
+    + "No answer"
+* wealth: Wealth of the student's parents
+    + Numeric variable with range from -6.98 to 4.44
+* book_id: Number of the questionnaire
+    + A factor with 36 levels
+* father_edu: Education of the father
+    + A factor with 8 levels (corresponding to ISCED classification)
+* mother_edu: Education of the mother
+    + A factor with 8 levels (corresponding to ISCED classification)
+* female: Whether the student is female
+    + Binary variable
+* country: Country in which the student took the test
+    + A factor with 55 levels
+
+All chosen variables are statistically significant; Their F values ranged from 41.27 (father_edu) to 2152.73 (edu_resources).
+
+
+# Interactions between variables
+
+We have investigated the occurence of interactions between variables by first building test models based on small number of the variables, and then building a full model with interactions which turned out significant in the respective test models. We have included only the interactions which had a relatively high value of the F statistic in order not to overcomplicate and overfit the model. 
+
+We have considered the following interactions:
+
+* father_edu : mother_edu
+    + F-value 13.34, P-value 0 
+* father_edu : female
+    + F-value 9.52, P-value 0
+* mother_edu : female
+    + F-value 3.99, P-value 0.0002
+* father_edu : mother_edu : female
+    + F-value 4.42, P-value 0
+* female : country
+    + F-value 13.82, P-value 0
+* female : edu_resources
+    + F-value 10.14, P-value 0.001
+* edu_resources : wealth
+    + F-value 0.48, P-value 0.48
+    
+All interactions, except from the one between educational resources and family wealth, are statistically noticeable. However, they do not explain much variability in the data. We have decided not to include them in the model. 
+
+We have also considered interactions with the score variable. Initially, we have considered a model in which the score variable interacted with every other variable. Based on information criterion, we have removed several interactions and chosen the following ones:
+
+* score : task
+* score : edu_resources
+* score : no_of_books
+* score : wealth
+* score : book_id
+* score : father_edu
+
+The Bayesian Information Criterion for the smaller model was equal to 1405653, while the one for the full model was equal to 1407132. Since the smaller model had a slightly smaller value and was much simpler, we have decided to accept it. 
+
+The chosen interactions are rather complex and hard to summarize. For example, the plot below depicts average solving times depending on task number and the score. It can be seen that the interaction is indeed significant, as for some tasks the solving time is longer for solutions with full credit, and for other tasks - on the contrary.
+
+![](score_task.png)
+
+We have further analyzed several discarded interactions to check if we can discover some interesting stories. 
+
+### Gender gap
+
+We have analyzed the gender gap in the times of solving the tasks. The gender gap was defined as the coefficient of interactions between the female and the country variables. The gender gap in Poland was set as the reference level. Since the time is transformed, the results are mostly qualitative, as they can't be easily translated into the actual solving times. 
+
+The blue colors on the map below indicate that the female students solve tasks faster than the male ones.
+
+![](gender_gap.png)
+
+Poland has a moderate gender gap. In most countries, male students solve tasks slightly faster than the female ones. However, there are a few countries in which male students perform much better, among others Finland, Slovakia and Quatar. The distribution of the gender gap is better visible on the histogram below.
+
+![](gender_gap_hist.png)
+
+### Parent's education
+
+We have also analyzed the influence of education of the parents on the solving time. The interaction turned out very complex because of multiple levels of factors. To simplify the dependence, we have encoded each education variable as two variables: First, a binary variable indicating whether the student answered the question about a parent's education; Second, a numerical value of the education. This means that we have assumed linear dependence between solving time and the level of education (measured as an integer from `0` to `6`). Since the relation is obviously not that simple, the coefficient of the linear part should be only interpreted as indicative of a general trend (e.g. whether, in general, the solving time decreases with the education of the mother).
+
+Surprisingly, we have found that the parents' education has, in general, negative impact on the student's performance. On the plots below, the `FISCED.int` value indicates the numerical value of the father's education, and the `MISCED.int` indicates the mother's education. The dotted lines depict actual solving times, while the full lines depict the computed trends. The red lines depict the performance of female students, while the blue ones depict the performance of male ones. 
+
+![](parents_edu_1.png)
+![](parents_edu_2.png)
+
+From the above plots, it is visible that there is an interaction between the education of the parents. For well-educated mothers (plot labelled by `MISCED.int: 6`) the solving time strongly increases with the increasing education of the father for both genders. On the contrary, for poorly educated mothers or no answer about mother's education (`MISCED:int 0` or `MISCED:int -1`), the solving time tends to decrease with increasing education of the father.  
+
+# Data transformation 
+
+The dependent variable (solving time) has been transformed using the Box-Cox transform (resulting exponent equal to `0.3434`).
+
+The score variable has been recoded to merge the "Parital credit" and "Full credit" groups. This is because the "Partial credit" group consisted of only several observations for only a single task. The recoding is supported by both AIC and BIC criterions (computed for the full model described later on). 
+
+The eduation of the father has been split into two variables similarly as in the interaction analysis: Whether there was an answer to the question (`father_edu_na`) and the numerical value of the education (`father_edu_num`). As before, we have assumed a linear dependence between the level of education (integer in range `0-6`) and the solving time. The education of the mother was left in the original encoding (factor with 8 levels). Such choice of encoding was motivated by the information criterions.
+
+After the model choice and variable transforming and encoding described above, we have arrived at the following model:
+
+```
+time.bc ~ score*(task + edu_resources + no_of_books + wealth + book_id + father_edu_num + father_edu_na) + mother_edu + female + country
+```
+
+
+# Mixed modelling
+
+Since the number of questionnaires is large, and we are not interested in the effects of particular questionnaires, we have decided to include the book_id variable as a random effect. Such modelling improves the model's BIC from `105836` to `104934`. We have kept the other variables as fixed effects due to computational complexity. 
+
+Using mixed models allowed us to incorporate variables which we could not use earlier due to extremely large numbers of levels and memory constraints: student's ID, student's school ID.
+
+By subsequent adding new random effects and comparing models with the BIC criterion, we have arrived at the following model:
+
+```
+time.bc ~ score*(task + edu_resources + no_of_books + wealth + father_edu_num + father_edu_na) + mother_edu + female + country + (1 + score | book_id) + (1 + wealth | school_id/student_id)
+```
+
+Thus, we consider the random effect of book_id, random effect of score variable for different values of book_id, random effect of student's id nested in school's id, and random slope of wealth for the latter. 
+
+The significance of the chosen effects has been confirmed with permutation tests. 
+
+# Final results
+
+Based on the mixed model, we have analyzed the dependence of solving time on several variables.
+
+### Country
+
+The plot below depicts the coefficients for different countries with Poland as reference level (fixed effect):
+
+![](cntry.png)
+
+Students in Korea (`KOR`), Netherlands (`NLG`), and Hong Kong (`HKG`) solve the tasks in the shortest time. On the other hand, students from three Latin America countries: Brazil (`BRA`), Peru (`PER`) and Mexico (`MEX`) perform the worst. Polish students have moderate performance, only slightly worse than French (`FRA`) or Finland (`FIN`), but apparantely much worse than many other Western European countries, like Germany (`GER`) or the Netherlands (`NLG`). 
+
+### Books
+
+The plot below depicts the coefficients for different numbers of books in home and different credits for the task:
+
+![](books.png)
+
+The number of books has a visible positive effect on time of solving tasks with full credit. The effect is much smaller for tasks with no credit, and apparantely there is no visible trend in this case. In case of unknown credit, the number of books has a negative impact on time, as with increasing number of books the time increases as well; however, this case is difficult to interpret. 
+
+
+
