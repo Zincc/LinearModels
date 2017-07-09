@@ -1,0 +1,165 @@
+---
+title: "Etap V"
+author: "Zofia Nawalany, Agata Gruszczyńska, Michał Karlicki"
+date: "4 czerwca 2017"
+output: html_document
+---
+#Spis treści  
+[1.Podsumowanie i wnioski](#1.Podsumowanie i wnioski etapu V)  
+[2.Cel](#2.Cel)  
+[3.Efekt płci i kraju](#3.Efekt płci i kraju)  
+[4.Efekt zadania i jego pozycji w kwestionariuszu](#4.Efekt zadania i jego pozycji w kwestionariuszu)  
+[5.Efekt kraju i języka](#5.Efekt kraju i języka)   
+[6.Efekt wykształcenia ojca i matki](#6.Efekt wykształcenia ojca i matki)    
+[7.Badanie istotności interakcji w modelu](#7. Zbadanie istotności interakcji w modelu)     
+
+
+#1.Podsumowanie i wnioski <a name="1.Podsumowanie i wnioski"></a>
+Zbadano interakcje między niektórymi elementami modelu. Okazało się, że interakcje występują między:  
+-id zadania ~ pozycji w akruszu   
+-kraj ~ płeć  
+-wykształcenie matki ~ wykształcenie ojca  
+Następnie zbadano istotność tych interakcji- wszystkie z powyższych okazały sie istotne. Na koniec porównano model stworzony w poprzednich etapach z modelem wzbogaconym o znalezione, istotne interakcje. Wynik testu anova wskazał wyższość modelu wzbogaconego o interakcje względem początkowego, bez interakcji.
+
+#2.Cel <a name="2.Cel"></a>
+Celem tego etapu projektu jest rozważenie i weryfikacja występowania interakcji (oraz ich istotności) pomiędzy kluczowymi elementami modelu. Przeanalizowano interakcje pomiędzy:   
+- płcią a krajem  
+- zadaniem a jego pozycją w kwestionariuszu   
+- krajem a używanym przez ucznia językiem   
+- wykształceniem matki a wykształceniem ojca   
+
+```{r, echo=FALSE, warning=F, message=F}
+#load("C:/Users/Gruszka/Documents/STUDIA/BioinformatykaUW/sem2_Bioinf/Biecek/Projekt R/etap III/data2.Rda")
+#load("C:/Users/Gruszka/Documents/STUDIA/BioinformatykaUW/sem2_Bioinf/Biecek/Projekt R/modele_liniowe-master/data.Rda")
+#load("/Users/michalkarlicki/data2.Rda")
+#load("/Users/michalkarlicki/modele_liniowe/data.Rda")
+load("data.Rda")
+load("/home/zinc/studia/modele liniowe i mieszane/data2.Rda")
+
+
+library(foreign)
+library(outliers)
+library(ggplot2)
+library(nortest)
+library(lmtest)
+library(broom)
+library(plyr)
+library(dplyr)
+library(agricolae)
+
+
+rozwazane_zmienne<-cbind.data.frame(atsm3$CNTSTUID, atsm3$CNT, atsm3$ST004D01T, atsm3$ST006Q01TA, atsm3$ST008Q01TA, atsm3$LANGTEST_COG, atsm3$ST146Q04TA)
+
+colnames(rozwazane_zmienne)<-c('CNTSTUID','kraj','plec', 'wyksztalcenie_M', 'wyksztalcenie_O', 'jezyk', 'czytanieCzasopismNaukowych')
+
+dane<-merge(atsm2,rozwazane_zmienne, by="CNTSTUID")
+dane<- subset(dane, select=-subject)
+#j<-c((unique(as.character(dane$jezyk))))
+dane2<-as.matrix(gsub("No Response", "brak danych", dane$jezyk))
+dane2[][is.na(dane2[])] <- "brak danych"
+dane$jezyk<-dane2
+#M<-c((unique(as.character(dane$wyksztalcenie_M))))
+dane3<-as.matrix(gsub("No Response", "brak danych", dane$wyksztalcenie_M))
+dane3<-as.matrix(gsub("No", "maksymalnie średnie", dane3))
+dane3<-as.matrix(gsub("Yes", "wyższe", dane3))
+dane3[][is.na(dane3[])] <- "brak danych"
+dane$wyksztalcenie_M<-dane3
+#O<-c((unique(dane$wyksztalcenie_O)))
+dane4<-as.matrix(gsub("No Response", "brak danych", dane$wyksztalcenie_O))
+dane4<-as.matrix(gsub("No", "maksymalnie średnie", dane4))
+dane4<-as.matrix(gsub("Yes", "wyższe", dane4))
+dane4[][is.na(dane4[])] <- "brak danych"
+dane$wyksztalcenie_O<-dane4
+```
+
+#3.Efekt płci i kraju <a name="3.Efekt płci i kraju"></a>
+Dla większości krajów średni czas rozwiązywania zadań wśród dziewcząt jest wyższy niż u chłopców. Wyjątkiem jest jednak Costa Rica oraz Mexico. Brak równoległości między odcinkami łamanych dla poszczególnych zadań wskazuje na występowanie interakcji.    
+```{r}
+
+int1 <- ddply(dane,.(kraj,plec),summarise, val = mean(log(question_time)))
+
+ggplot(dane, aes(x = factor(kraj), y = log(question_time), colour = plec)) + 
+    geom_point(data = int1, aes(y = val)) +
+    geom_line(data = int1, aes(y = val, group = plec)) +   
+    theme_bw()+
+    theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+    xlab("Kraj")+
+    ylab("Średni czas zadania")+
+    ggtitle("Interakcje między płciami a średnim czasem rozwiązywania zadań w różnych krajach")
+```
+    
+#4.Efekt zadania i jego pozycji w kwestionariuszu <a name="4.Efekt zadania i jego pozycji w kwestionariuszu"></a>
+Każde zadanie będąc umieszczone w kwestionariuszu na pozycji pierwszej (pomarańczowa linia) było rozwiązywane dłużej niż będąc na pozostałych pozycjach. Zadaniu usytuowanemu jako ostatnie w kwestionariuszu zazwyczaj poświęcano najmniej czasu. Zazwyczaj ponieważ np. dla zadań M800 i M464 gdy występowały na pozycji 4 były średnio szybciej rozwizwyne niż będąc na pozycji 2.   
+W przypdaku zadań na pozcjach 2 i 3 średnia czas rozwiązywania zadań był istotnie różny w zależności od konkretnego zadania.  
+Tak jak w przypadku poprzednich badanych zmiennych moża stwierdzić, że brak równoległości między odcinkami łamanych dla poszczególnych zadań wskazuje na występowanie interakcji.      
+```{r}
+int1 <- ddply(dane,.(item,position),summarise, val = mean(log(question_time)))
+
+ggplot(dane, aes(x = factor(item), y = log(question_time), colour = position)) + 
+    geom_point(data = int1, aes(y = val)) +
+    geom_line(data = int1, aes(y = val, group = position)) +   
+    theme_bw()+
+    theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+    xlab("Numer zadania")+
+    ylab("Średni czas zadania")+
+    ggtitle("Interakcje między numerem zadania a jego pozycją")
+
+
+```
+     
+#5.Efekt kraju i języka <a name="5.Efekt kraju i języka"></a>
+Osoby posługujące się językiem hiszpańskim lub portugalskim niezależnie od kraju rozwiązywali zadania widocznie dłużej. Najkrócej zadania rozwiązywały osoby posługujące się językiem chińskim i angielskim. Średni czas rozwiązywania zadań dla Tunezji (jedynego kraju reprezentujacego język arabski) również wypadł wysoko jednak może to być związane z niedoreprezentowaniem tego języka przez inne kraje.   
+Niestesty na podstawie istniejących danych nie możemy powiedzieć nic na temat występowania interakcji, ponieważ tylko w dwóch przypadkach krajów uczniowie posługują się dwoma językami. W tym przypadku równoległość lub jej brak między prostymi jest przypadkowa i uzależniona od uszeregowania krajów. 
+
+```{r}
+int1 <- ddply(dane,.(kraj,jezyk),summarise, val = mean(log(question_time)))
+
+ggplot(dane, aes(x = factor(kraj), y = log(question_time), colour = jezyk)) + 
+    geom_point(data = int1, aes(y = val)) +
+    geom_line(data = int1, aes(y = val, group = jezyk)) +   
+    theme_bw()+
+    theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+    xlab("Kraj")+
+    ylab("Średni czas zadania")+
+    ggtitle("Interakcje między krajem a średnim czasem rozwiązywania zadań w zależności od języka")
+```
+     
+#6.Efekt wykształcenia ojca i matki <a name="6.Efekt wykształcenia ojca i matki"></a>
+Wykształcenie ojca na poziomie wyższym przekłada się na krótszy czas poświęcany na zadanie. Na wykresie widoczne jest przecięcie, co oznacza interakcję pomiędzy wykształceniem ojca i matki.
+```{r}
+int1 <- ddply(dane,.(wyksztalcenie_O,wyksztalcenie_M),summarise, val = mean(log(as.numeric(question_time))))
+
+ggplot(dane, aes(x = factor(wyksztalcenie_O), y = log(question_time), colour = wyksztalcenie_M)) + 
+    geom_point(data = int1, aes(y = val)) +
+    geom_line(data = int1, aes(y = val, group = wyksztalcenie_M)) +   
+    theme_bw()+
+    theme(axis.text.x = element_text(angle = 0, hjust = 0.5))+
+    xlab("Wykształcenie ojca")+
+    ylab("Średni czas zadania")+
+    ggtitle("Interakcje między wykształceniem ojca i matki")
+```
+
+
+#7. Badanie istotności interakcji w modelu <a name="7. Zbadanie istotności interakcji w modelu"></a>
+W celu zbadania istotności znalezionych powyżej interakcji, modyfikujemy nasz model z poprzednich etapów.    
+Znalezione interakcje to:   
+-id zadania ~ pozycji w akruszu   
+-kraj ~ płeć  
+-wykształcenie matki ~ wykształcenie ojca   
+
+Najpierw sprawdzono istotność każdej z tych interkacji testem anova- wszystkie wykazały wysoką istotność.   
+```{r}
+model_podstawowy<-(lm(log(question_time)~(position/item)+jezyk+kraj+plec+wyksztalcenie_M+wyksztalcenie_O+czytanieCzasopismNaukowych, data=dane))
+
+anova(lm(log(question_time)~item*position, data=dane))
+anova(lm(log(question_time)~(item/position), data=dane))
+anova(lm(log(question_time)~(kraj*plec), data=dane))
+anova(lm(log(question_time)~(wyksztalcenie_M*wyksztalcenie_O), data=dane))
+
+```
+Następnie porównano model stworzony w poprzednich etapach projektu (model_podstawowy) z modelem wzbogaconym o znalezione interakcje (model_nowy). Na podstawie wyników testu anova można stwierdzić, że model wzbogacony o interakcje jest istotnie lepszy niż poprzedni model.
+```{r}
+model_nowy<-(lm(log(question_time)~position*item+jezyk+kraj*plec+wyksztalcenie_M*wyksztalcenie_O+czytanieCzasopismNaukowych, data=dane))
+
+anova(model_podstawowy, model_nowy)
+```
